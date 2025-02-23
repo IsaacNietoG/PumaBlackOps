@@ -9,13 +9,20 @@ I'll only do exceptions to this rule in the cases where the tool is not currentl
 
 ## Table of Contents
 [**General Scripts**](https://github.com/IsaacNietoG/PumaBlackOps#general-scripts)
+
     - [**Create Target Folder**](https://github.com/IsaacNietoG/PumaBlackOps#create-target-folder)
+
     - [**Create CTF Repo**](https://github.com/IsaacNietoG/PumaBlackOps#create-ctf-repo)
+
 [**Stegonography**](https://github.com/IsaacNietoG/PumaBlackOps#stegonography)
+
     - [**Automatic Stego Check**](https://github.com/IsaacNietoG/PumaBlackOps#automatic-stego-check)
+
 [**Cryptography**](https://github.com/IsaacNietoG/PumaBlackOps#cryptography)
 
+
 [**Web Hacking**](https://github.com/IsaacNietoG/PumaBlackOps#web-hacking)
+
     - [**Auto Nmap Scan**](https://github.com/IsaacNietoG/PumaBlackOps#auto-nmap-scan)
 
 [**Networking**](https://github.com/IsaacNietoG/PumaBlackOps#networking)
