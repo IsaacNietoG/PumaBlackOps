@@ -1,0 +1,248 @@
+#!/bin/bash
+
+# Target - Herramienta de gestión de objetivos para pentesting
+# Uso: target <subcomando> [opciones]
+
+# Colores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Función para mostrar ayuda
+show_help() {
+    echo -e "${BLUE}Target - Herramienta de gestión de objetivos${NC}"
+    echo ""
+    echo "Uso: target <subcomando> [opciones]"
+    echo ""
+    echo "Subcomandos disponibles:"
+    echo "  add <nombre_maquina> <IP>     - Crear nuevo workspace para un objetivo"
+    echo "  scan <nombre_maquina>         - Ejecutar escaneo Nmap completo"
+    echo "  list                          - Listar todos los objetivos"
+    echo "  info <nombre_maquina>         - Mostrar información del objetivo"
+    echo "  help                          - Mostrar esta ayuda"
+    echo ""
+    echo "Ejemplos:"
+    echo "  target add vulnbox 192.168.1.100"
+    echo "  target scan vulnbox"
+    echo "  target list"
+}
+
+# Función para crear nuevo workspace (target add)
+target_add() {
+    if [ $# -ne 2 ]; then
+        echo -e "${RED}Error: Uso: target add <nombre_maquina> <IP>${NC}"
+        exit 1
+    fi
+
+    TARGET_NAME=$1
+    TARGET_IP=$2
+
+    # Crear carpeta de trabajo
+    WORKSPACE_DIR="./$TARGET_NAME"
+    mkdir -p "$WORKSPACE_DIR"
+
+    # Crear archivo .envrc con la IP del target
+    echo "export TARGET=$TARGET_IP" > "$WORKSPACE_DIR/.envrc"
+
+    # Crear un archivo README.md para documentación rápida
+    cat <<EOL > "$WORKSPACE_DIR/writeup.md"
+# $TARGET_NAME
+
+- **IP**: $TARGET_IP
+- **Creado el**: $(date)
+- **Notas**: Escribe cualquier detalle relevante aquí.
+
+## Notas Iniciales
+
+## Reconocimiento
+
+## Explotación
+
+## Post-Explotación
+
+## Notas Finales
+EOL
+
+    # Crear directorios para distintas fases de pentesting
+    mkdir -p "$WORKSPACE_DIR/recon"   # Escaneos de Nmap
+    mkdir -p "$WORKSPACE_DIR/exploits"  # Posibles exploits o POCs
+    mkdir -p "$WORKSPACE_DIR/loot"  # Archivos obtenidos durante la explotación
+    mkdir -p "$WORKSPACE_DIR/research"  # Recursos importantes
+
+    echo -e "${GREEN}Workspace para $TARGET_NAME creada en $WORKSPACE_DIR${NC}"
+    echo -e "${YELLOW}Para cambiar al directorio: cd $WORKSPACE_DIR${NC}"
+}
+
+# Función para escanear objetivo (target scan)
+target_scan() {
+    if [ $# -eq 1 ]; then
+        TARGET_NAME=$1
+        WORKSPACE_DIR="./$TARGET_NAME"
+    elif [ $# -eq 0 ] && [ -f ./.envrc ]; then
+        TARGET_NAME=$(basename "$PWD")
+        WORKSPACE_DIR="$PWD"
+    else
+        echo -e "${RED}Error: Uso: target scan <nombre_maquina> (o ejecuta dentro del workspace)${NC}"
+        exit 1
+    fi
+
+    # Verificar que el workspace existe
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
+        echo -e "${YELLOW}Usa 'target add $TARGET_NAME <IP>' para crear el workspace${NC}"
+        exit 1
+    fi
+
+    # Cargar variables del workspace
+    if [ -f "$WORKSPACE_DIR/.envrc" ]; then
+        source "$WORKSPACE_DIR/.envrc"
+    else
+        echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
+        exit 1
+    fi
+
+    # Verificar que TARGET está definido
+    if [ -z "$TARGET" ]; then
+        echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Iniciando escaneo Nmap para $TARGET_NAME ($TARGET)${NC}"
+    echo -e "${YELLOW}Comando: nmap -A -T4 -Pn $TARGET${NC}"
+    echo ""
+
+    # Ejecutar nmap y guardar resultados
+    TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+    OUTPUT_FILE="$WORKSPACE_DIR/recon/nmap_scan_${TIMESTAMP}.txt"
+    
+    nmap -A -T4 -Pn "$TARGET" | tee "$OUTPUT_FILE"
+    
+    echo ""
+    echo -e "${GREEN}Escaneo completado. Resultados guardados en: $OUTPUT_FILE${NC}"
+}
+
+# Función para listar objetivos
+target_list() {
+    echo -e "${BLUE}Objetivos disponibles:${NC}"
+    echo ""
+    
+    for dir in */; do
+        if [ -d "$dir" ] && [ -f "$dir/.envrc" ]; then
+            TARGET_NAME=$(basename "$dir")
+            source "$dir/.envrc"
+            echo -e "${GREEN}• $TARGET_NAME${NC} - $TARGET"
+        fi
+    done
+}
+
+# Función para mostrar información del objetivo
+target_info() {
+    if [ $# -eq 1 ]; then
+        TARGET_NAME=$1
+        WORKSPACE_DIR="./$TARGET_NAME"
+    elif [ $# -eq 0 ] && [ -f ./.envrc ]; then
+        TARGET_NAME=$(basename "$PWD")
+        WORKSPACE_DIR="$PWD"
+    else
+        echo -e "${RED}Error: Uso: target info <nombre_maquina> (o ejecuta dentro del workspace)${NC}"
+        exit 1
+    fi
+
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Información del objetivo: $TARGET_NAME${NC}"
+    echo ""
+    
+    if [ -f "$WORKSPACE_DIR/.envrc" ]; then
+        source "$WORKSPACE_DIR/.envrc"
+        echo -e "${GREEN}IP:${NC} $TARGET"
+    fi
+    
+    if [ -f "$WORKSPACE_DIR/writeup.md" ]; then
+        echo -e "${GREEN}Writeup:${NC} $WORKSPACE_DIR/writeup.md"
+    fi
+    
+    echo -e "${GREEN}Directorios:${NC}"
+    ls -la "$WORKSPACE_DIR" | grep "^d"
+}
+
+# Función para agregar una nota rápida al writeup
+target_note() {
+    if [ $# -ge 1 ]; then
+        # Si el primer argumento es un nombre de target (existe carpeta y .envrc)
+        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
+            TARGET_NAME=$1
+            WORKSPACE_DIR="./$TARGET_NAME"
+            shift
+        else
+            # Si no existe, asumimos que estamos en el workspace y el argumento es la nota
+            TARGET_NAME=$(basename "$PWD")
+            WORKSPACE_DIR="$PWD"
+        fi
+    elif [ -f ./.envrc ]; then
+        TARGET_NAME=$(basename "$PWD")
+        WORKSPACE_DIR="$PWD"
+    else
+        echo -e "${RED}Error: Uso: target note [nombre_maquina] <texto de la nota> (o ejecuta dentro del workspace)${NC}"
+        exit 1
+    fi
+
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
+        exit 1
+    fi
+
+    if [ $# -eq 0 ]; then
+        echo -e "${RED}Error: Debes ingresar el texto de la nota${NC}"
+        exit 1
+    fi
+
+    NOTE_TEXT="$*"
+    NOTE_DATE=$(date '+%Y-%m-%d %H:%M')
+    WRITEUP_FILE="$WORKSPACE_DIR/writeup.md"
+
+    echo -e "\n---\n**Nota rápida [$NOTE_DATE]:** $NOTE_TEXT" >> "$WRITEUP_FILE"
+    echo -e "${GREEN}Nota agregada a $WRITEUP_FILE${NC}"
+}
+
+# Verificar que se proporcione al menos un argumento
+if [ $# -eq 0 ]; then
+    show_help
+    exit 1
+fi
+
+# Procesar subcomandos
+case "$1" in
+    "add")
+        target_add "$2" "$3"
+        ;;
+    "scan")
+        shift
+        target_scan "$@"
+        ;;
+    "list")
+        target_list
+        ;;
+    "info")
+        shift
+        target_info "$@"
+        ;;
+    "note")
+        shift
+        target_note "$@"
+        ;;
+    "help"|"-h"|"--help")
+        show_help
+        ;;
+    *)
+        echo -e "${RED}Error: Subcomando '$1' no reconocido${NC}"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac 
