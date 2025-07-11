@@ -1,0 +1,3 @@
+[submodule "Sourcecodes/PEASS-ng"]
+	path = Sourcecodes/PEASS-ng
+	url = https://github.com/IsaacNietoG/PEASS-ng
