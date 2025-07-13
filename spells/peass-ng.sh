@@ -29,7 +29,7 @@ REPO_URL="https://github.com/IsaacNietoG/PEASS-ng"
 TEMP_DIR="/tmp/peass-ng-build"
 BUILD_SCRIPT="./buildCustom.sh"
 OUTPUT_FILE="/tmp/linpeas_ctf.sh"
-BIN_DIR="$(dirname "$0")/../bin"
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)/../bin"
 TARGET_NAME="ctflinpeas"
 
 print_status "Starting PEASS-ng spell..."
@@ -67,6 +67,7 @@ fi
 
 # Move file to bin directory
 print_status "Moving linPEAS to bin directory..."
+mkdir -p "$BIN_DIR"
 cp "$OUTPUT_FILE" "$BIN_DIR/$TARGET_NAME"
 chmod +x "$BIN_DIR/$TARGET_NAME"
 
