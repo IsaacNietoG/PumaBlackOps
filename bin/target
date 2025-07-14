@@ -15,18 +15,22 @@ show_help() {
     echo -e "${BLUE}Target - Herramienta de gestión de objetivos${NC}"
     echo ""
     echo "Uso: target <subcomando> [opciones]"
+    echo "Protip: si estás bajo la carpeta de un target, el parámetro <nombre_máquina> no es necesario"
     echo ""
     echo "Subcomandos disponibles:"
     echo "  add <nombre_maquina> <IP>     - Crear nuevo workspace para un objetivo"
     echo "  scan <nombre_maquina>         - Ejecutar escaneo Nmap completo"
     echo "  list                          - Listar todos los objetivos"
     echo "  info <nombre_maquina>         - Mostrar información del objetivo"
+    echo "  note <nombre_maquina> <nota>  - Agregar nota rápida al writeup"
+    echo "  dirsearch <nombre_maquina> <puerto> - Buscar directorios con ffuf (recursivo, usa SecLists)"
     echo "  help                          - Mostrar esta ayuda"
     echo ""
     echo "Ejemplos:"
     echo "  target add vulnbox 192.168.1.100"
     echo "  target scan vulnbox"
     echo "  target list"
+    echo "  target dirsearch vulnbox 8080"
 }
 
 # Función para crear nuevo workspace (target add)
@@ -210,6 +214,78 @@ target_note() {
     echo -e "${GREEN}Nota agregada a $WRITEUP_FILE${NC}"
 }
 
+# Función para realizar búsqueda de directorios con ffuf (target dirsearch)
+target_dirsearch() {
+    # Uso: target dirsearch [nombre_maquina] [puerto]
+    if [ $# -ge 1 ]; then
+        # Si el primer argumento es un nombre de target (existe carpeta y .envrc)
+        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
+            TARGET_NAME=$1
+            WORKSPACE_DIR="./$TARGET_NAME"
+            shift
+        else
+            # Si no existe, asumimos que estamos en el workspace y el argumento es el puerto
+            TARGET_NAME=$(basename "$PWD")
+            WORKSPACE_DIR="$PWD"
+        fi
+    elif [ -f ./.envrc ]; then
+        TARGET_NAME=$(basename "$PWD")
+        WORKSPACE_DIR="$PWD"
+    else
+        echo -e "${RED}Error: Uso: target dirsearch [nombre_maquina] [puerto] (o ejecuta dentro del workspace)${NC}"
+        exit 1
+    fi
+
+    if [ ! -d "$WORKSPACE_DIR" ]; then
+        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
+        exit 1
+    fi
+
+    # Cargar IP del target
+    if [ -f "$WORKSPACE_DIR/.envrc" ]; then
+        source "$WORKSPACE_DIR/.envrc"
+    else
+        echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
+        exit 1
+    fi
+
+    if [ -z "$TARGET" ]; then
+        echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
+        exit 1
+    fi
+
+    # Puerto opcional
+    PORT=80
+    if [ $# -ge 1 ]; then
+        PORT=$1
+    fi
+
+    # Construir URL
+    if [ "$PORT" = "80" ]; then
+        URL="http://$TARGET/"
+    elif [ "$PORT" = "443" ]; then
+        URL="https://$TARGET/"
+    else
+        URL="http://$TARGET:$PORT/"
+    fi
+
+    # Diccionario por defecto
+    WORDLIST="/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
+    OUTPUT_DIR="$WORKSPACE_DIR/recon"
+    mkdir -p "$OUTPUT_DIR"
+    TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+    OUTPUT_FILE="$OUTPUT_DIR/ffuf_dirsearch_${PORT}_${TIMESTAMP}.txt"
+
+    echo -e "${BLUE}Iniciando búsqueda de directorios con ffuf para $TARGET_NAME ($URL)${NC}"
+    echo -e "${YELLOW}Comando: ffuf -u ${URL}FUZZ -w $WORDLIST -recursion -o $OUTPUT_FILE${NC}"
+    echo ""
+
+    ffuf -u "${URL}FUZZ" -w "$WORDLIST" -recursion -o "$OUTPUT_FILE" -of simple
+
+    echo ""
+    echo -e "${GREEN}Búsqueda completada. Resultados guardados en: $OUTPUT_FILE${NC}"
+}
+
 # Verificar que se proporcione al menos un argumento
 if [ $# -eq 0 ]; then
     show_help
@@ -235,6 +311,10 @@ case "$1" in
     "note")
         shift
         target_note "$@"
+        ;;
+    "dirsearch")
+        shift
+        target_dirsearch "$@"
         ;;
     "help"|"-h"|"--help")
         show_help
