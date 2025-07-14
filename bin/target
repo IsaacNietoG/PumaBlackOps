@@ -24,6 +24,7 @@ show_help() {
     echo "  info <nombre_maquina>         - Mostrar información del objetivo"
     echo "  note <nombre_maquina> <nota>  - Agregar nota rápida al writeup"
     echo "  dirsearch <nombre_maquina> <puerto> - Buscar directorios con ffuf (recursivo, usa SecLists)"
+    echo "  venv [nombre_maquina]          - Crear y configurar entorno virtual Python para el target (con activación automática en .envrc)"
     echo "  help                          - Mostrar esta ayuda"
     echo ""
     echo "Ejemplos:"
@@ -31,6 +32,7 @@ show_help() {
     echo "  target scan vulnbox"
     echo "  target list"
     echo "  target dirsearch vulnbox 8080"
+    echo "  target venv vulnbox"
 }
 
 # Función para crear nuevo workspace (target add)
@@ -286,6 +288,59 @@ target_dirsearch() {
     echo -e "${GREEN}Búsqueda completada. Resultados guardados en: $OUTPUT_FILE${NC}"
 }
 
+# Función para crear y configurar entorno virtual Python (target venv)
+target_venv() {
+    # Uso: target venv [nombre_maquina]
+    if [ $# -ge 1 ]; then
+        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
+            TARGET_NAME=$1
+            WORKSPACE_DIR="./$TARGET_NAME"
+        else
+            echo -e "${RED}Error: Workspace '$1' no encontrado${NC}"
+            exit 1
+        fi
+    elif [ -f ./.envrc ]; then
+        TARGET_NAME=$(basename "$PWD")
+        WORKSPACE_DIR="$PWD"
+    else
+        echo -e "${RED}Error: Uso: target venv [nombre_maquina] (o ejecuta dentro del workspace)${NC}"
+        exit 1
+    fi
+
+    cd "$WORKSPACE_DIR"
+
+    # Crear entorno virtual si no existe
+    if [ ! -d "venv" ]; then
+        echo -e "${BLUE}Creando entorno virtual Python en $WORKSPACE_DIR/venv ...${NC}"
+        python3 -m venv venv
+        echo -e "${GREEN}Entorno virtual creado.${NC}"
+    else
+        echo -e "${YELLOW}El entorno virtual ya existe en $WORKSPACE_DIR/venv${NC}"
+    fi
+
+    # Agregar activación automática a .envrc si no existe
+    if ! grep -q 'source ./venv/bin/activate' .envrc; then
+        echo 'source ./venv/bin/activate' >> .envrc
+        echo -e "${GREEN}Línea de activación agregada a .envrc${NC}"
+    else
+        echo -e "${YELLOW}La activación automática ya está presente en .envrc${NC}"
+    fi
+
+    echo -e "${BLUE}Si tienes direnv instalado, el entorno virtual se activará automáticamente al entrar a este directorio.${NC}"
+    echo -e "${YELLOW}Si no usas direnv, puedes activar el entorno manualmente con: source venv/bin/activate${NC}"
+
+    # Opcional: instalar requirements.txt si existe
+    if [ -f "requirements.txt" ]; then
+        echo -e "${BLUE}Se detectó requirements.txt. ¿Deseas instalar dependencias ahora? (s/n)${NC}"
+        read -r RESP
+        if [[ "$RESP" =~ ^[sS]$ ]]; then
+            ./venv/bin/pip install -r requirements.txt
+        fi
+    fi
+
+    cd - > /dev/null
+}
+
 # Verificar que se proporcione al menos un argumento
 if [ $# -eq 0 ]; then
     show_help
@@ -315,6 +370,10 @@ case "$1" in
     "dirsearch")
         shift
         target_dirsearch "$@"
+        ;;
+    "venv")
+        shift
+        target_venv "$@"
         ;;
     "help"|"-h"|"--help")
         show_help

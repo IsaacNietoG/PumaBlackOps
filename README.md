@@ -59,6 +59,7 @@ El script `bin/target` permite gestionar workspaces de pentesting de forma senci
 - `note [nombre_maquina] <nota>`: Agrega una nota rápida al writeup del objetivo.
 - `dirsearch [nombre_maquina] [puerto]`: Realiza una búsqueda recursiva de directorios con ffuf usando SecLists.
 - `help`: Muestra la ayuda y ejemplos de uso.
+- `venv [nombre_maquina]`: Crea y configura un entorno virtual Python en el workspace del target, agregando la activación automática a .envrc (ideal para usar con direnv).
 
 **Ejemplo de flujo de trabajo:**
 ```bash
@@ -73,6 +74,9 @@ target scan
 
 # Buscar directorios web en el puerto 8080
 target dirsearch 8080
+
+# Crear y activar entorno virtual Python para el target
+target venv
 
 # Agregar una nota rápida
 target note "Encontrado panel de admin en /admin"
@@ -114,7 +118,7 @@ target note "Encontrado panel de admin en /admin"
 
 ## Recomendado
 
-- Si descargas direnv, las variables de entorno dependientes al folder creadas por target se manejan automáticamente.
+- Si descargas direnv, las variables de entorno dependientes al folder creadas por target se manejan automáticamente, así como el entorno virtual de Python (si aplica).
 
 ---
 
