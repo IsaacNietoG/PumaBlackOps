@@ -282,7 +282,7 @@ target_dirsearch() {
     echo -e "${YELLOW}Comando: ffuf -u ${URL}FUZZ -w $WORDLIST -recursion -o $OUTPUT_FILE${NC}"
     echo ""
 
-    ffuf -u "${URL}FUZZ" -w "$WORDLIST" -recursion -o "$OUTPUT_FILE" -of simple
+    ffuf -u "${URL}FUZZ" -w "$WORDLIST" -recursion -o "$OUTPUT_FILE" -of md
 
     echo ""
     echo -e "${GREEN}Búsqueda completada. Resultados guardados en: $OUTPUT_FILE${NC}"
