@@ -52,7 +52,7 @@ Directorio reservado para código fuente adicional o scripts personalizados.
 
 El script `bin/target` permite gestionar workspaces de pentesting de forma sencilla. Sus subcomandos principales son:
 
-- `add <nombre_maquina> <IP>`: Crea un nuevo workspace para un objetivo.
+- `add <nombre_maquina> <IP>`: Crea un nuevo workspace para un objetivo; carga una copia de ctfpeas en la raiz del proyecto para un rápido despliegue en el foothold.
 - `scan <nombre_maquina>`: Ejecuta un escaneo Nmap completo y guarda los resultados.
 - `list`: Lista todos los objetivos/workspaces creados.
 - `info <nombre_maquina>`: Muestra información y estructura del objetivo.

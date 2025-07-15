@@ -77,6 +77,18 @@ EOL
     mkdir -p "$WORKSPACE_DIR/loot"  # Archivos obtenidos durante la explotación
     mkdir -p "$WORKSPACE_DIR/research"  # Recursos importantes
 
+    # Copiar ctflinpeas al directorio del target
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CTFLINPEAS_SRC="$SCRIPT_DIR/ctflinpeas"
+    CTFLINPEAS_DST="$WORKSPACE_DIR/ctflinpeas"
+    if [ -f "$CTFLINPEAS_SRC" ]; then
+        cp "$CTFLINPEAS_SRC" "$CTFLINPEAS_DST"
+        chmod +x "$CTFLINPEAS_DST"
+        echo -e "${GREEN}ctflinpeas copiado a $CTFLINPEAS_DST${NC}"
+    else
+        echo -e "${YELLOW}Advertencia: ctflinpeas no encontrado en $CTFLINPEAS_SRC. No se copió.${NC}"
+    fi
+
     echo -e "${GREEN}Workspace para $TARGET_NAME creada en $WORKSPACE_DIR${NC}"
     echo -e "${YELLOW}Para cambiar al directorio: cd $WORKSPACE_DIR${NC}"
 }
