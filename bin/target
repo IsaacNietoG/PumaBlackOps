@@ -19,13 +19,24 @@ show_help() {
     echo ""
     echo "Subcomandos disponibles:"
     echo "  add <nombre_maquina> <IP>     - Crear nuevo workspace para un objetivo"
-    echo "  scan <nombre_maquina>         - Ejecutar escaneo Nmap completo"
+    echo "  scan                          - Ejecutar escaneos nmap (ver más abajo)"
     echo "  list                          - Listar todos los objetivos"
     echo "  info <nombre_maquina>         - Mostrar información del objetivo"
     echo "  note <nombre_maquina> <nota>  - Agregar nota rápida al writeup"
     echo "  dirsearch <nombre_maquina> <puerto> - Buscar directorios con ffuf (recursivo, usa SecLists)"
     echo "  venv [nombre_maquina]          - Crear y configurar entorno virtual Python para el target (con activación automática en .envrc)"
     echo "  help                          - Mostrar esta ayuda"
+    echo ""
+    echo "Subcomandos avanzados de escaneo (dentro del workspace):"
+    echo "  target scan ports [--top-ports N | --all-ports]   # Escaneo de puertos TCP (por defecto top 1000)"
+    echo "  target scan services                             # Escaneo de servicios/versión sobre puertos detectados"
+    echo "  target scan all [--top-ports N | --all-ports]    # Hace ambos pasos en orden"
+    echo ""
+    echo "Ejemplos de escaneo dentro del workspace del target:"
+    echo "  target scan ports --top-ports 1000"
+    echo "  target scan ports --all-ports"
+    echo "  target scan services"
+    echo "  target scan all --top-ports 5000"
     echo ""
     echo "Ejemplos:"
     echo "  target add vulnbox 192.168.1.100"
@@ -93,52 +104,106 @@ EOL
     echo -e "${YELLOW}Para cambiar al directorio: cd $WORKSPACE_DIR${NC}"
 }
 
-# Función para escanear objetivo (target scan)
-target_scan() {
-    if [ $# -eq 1 ]; then
-        TARGET_NAME=$1
-        WORKSPACE_DIR="./$TARGET_NAME"
-    elif [ $# -eq 0 ] && [ -f ./.envrc ]; then
+# Función para escanear puertos (target scan ports)
+target_scan_ports() {
+    # Uso: target scan ports [--top-ports N | --all-ports]
+    PORT_OPTION="--top-ports 1000"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --top-ports)
+                shift
+                PORT_OPTION="--top-ports $1"
+                shift
+                ;;
+            --all-ports)
+                PORT_OPTION="-p-"
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    OUTPUT_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
+    echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($TARGET)${NC}"
+    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
+    nmap -Pn -n -T4 "$TARGET" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
+    echo -e "${GREEN}Escaneo de puertos completado. Resultados en: $OUTPUT_FILE${NC}"
+}
+
+# Función para escanear servicios/versión (target scan services)
+target_scan_services() {
+    PORTS_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
+    OUTPUT_FILE="$WORKSPACE_DIR/recon/versions_scan.txt"
+    if [ ! -f "$PORTS_FILE" ]; then
+        echo -e "${RED}Error: No se encontró $PORTS_FILE. Ejecuta primero 'target scan ports' o 'target scan all'.${NC}"
+        exit 1
+    fi
+    # Extraer puertos abiertos del archivo de escaneo de puertos
+    OPEN_PORTS=$(grep -oP '^[0-9]+/tcp\s+open' "$PORTS_FILE" | cut -d'/' -f1 | paste -sd, -)
+    if [ -z "$OPEN_PORTS" ]; then
+        echo -e "${YELLOW}No se detectaron puertos abiertos en $PORTS_FILE. No se realizará escaneo de servicios.${NC}"
+        exit 0
+    fi
+    echo -e "${BLUE}Iniciando escaneo de servicios/versión para $TARGET_NAME ($TARGET) en puertos: $OPEN_PORTS${NC}"
+    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET -sCV -oN $OUTPUT_FILE -p $OPEN_PORTS${NC}"
+    nmap -Pn -n -T4 "$TARGET" -sCV -oN "$OUTPUT_FILE" -p "$OPEN_PORTS"
+    echo -e "${GREEN}Escaneo de servicios completado. Resultados en: $OUTPUT_FILE${NC}"
+}
+
+# Función para escaneo combinado (target scan all)
+target_scan_all() {
+    # Pasar los mismos parámetros de puertos que a ports
+    target_scan_ports "$@"
+    target_scan_services
+}
+
+# Nueva función principal para target scan
+main_target_scan() {
+    if [ $# -eq 0 ]; then
+        echo -e "${BLUE}Uso de target scan:${NC}"
+        echo "  target scan ports [--top-ports N | --all-ports]   # Escaneo de puertos TCP (por defecto top 1000)"
+        echo "  target scan services                             # Escaneo de servicios/versión sobre puertos detectados"
+        echo "  target scan all [--top-ports N | --all-ports]    # Hace ambos pasos en orden"
+        exit 1
+    fi
+    MODE=$1
+    shift
+    # Determinar target y workspace
+    if [ -f ./.envrc ]; then
         TARGET_NAME=$(basename "$PWD")
         WORKSPACE_DIR="$PWD"
     else
-        echo -e "${RED}Error: Uso: target scan <nombre_maquina> (o ejecuta dentro del workspace)${NC}"
+        echo -e "${RED}Error: Ejecuta este comando dentro del workspace del target (donde está .envrc)${NC}"
         exit 1
     fi
-
-    # Verificar que el workspace existe
-    if [ ! -d "$WORKSPACE_DIR" ]; then
-        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
-        echo -e "${YELLOW}Usa 'target add $TARGET_NAME <IP>' para crear el workspace${NC}"
-        exit 1
-    fi
-
-    # Cargar variables del workspace
     if [ -f "$WORKSPACE_DIR/.envrc" ]; then
         source "$WORKSPACE_DIR/.envrc"
     else
         echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
         exit 1
     fi
-
-    # Verificar que TARGET está definido
     if [ -z "$TARGET" ]; then
         echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
         exit 1
     fi
-
-    echo -e "${BLUE}Iniciando escaneo Nmap para $TARGET_NAME ($TARGET)${NC}"
-    echo -e "${YELLOW}Comando: nmap -A -T4 -Pn $TARGET${NC}"
-    echo ""
-
-    # Ejecutar nmap y guardar resultados
-    TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-    OUTPUT_FILE="$WORKSPACE_DIR/recon/nmap_scan_${TIMESTAMP}.txt"
-    
-    nmap -A -T4 -Pn "$TARGET" | tee "$OUTPUT_FILE"
-    
-    echo ""
-    echo -e "${GREEN}Escaneo completado. Resultados guardados en: $OUTPUT_FILE${NC}"
+    case "$MODE" in
+        ports)
+            target_scan_ports "$@"
+            ;;
+        services)
+            target_scan_services
+            ;;
+        all)
+            target_scan_all "$@"
+            ;;
+        *)
+            echo -e "${RED}Error: Modo de escaneo '$MODE' no reconocido${NC}"
+            echo "Modos válidos: ports, services, all"
+            exit 1
+            ;;
+    esac
 }
 
 # Función para listar objetivos
@@ -366,7 +431,7 @@ case "$1" in
         ;;
     "scan")
         shift
-        target_scan "$@"
+        main_target_scan "$@"
         ;;
     "list")
         target_list
