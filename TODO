@@ -1,11 +1,5 @@
 # Lista de features para implementar
 
-## target-scan
-- Parametro para seleccionar opciones de puertos en target scan
-- Mas modos de puertos:
-nmap -Pn -n -T4 $TARGET_IP --open -p- -oN enum/port_scan.txt -sS
-nmap -Pn -n -T4 $TARGET_IP -sCV -oN enum/versions_scan.txt -p
-
 ## nuevas features
 - Funcion para activar VPN rapidamente
 
