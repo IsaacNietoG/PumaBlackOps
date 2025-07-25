@@ -1,6 +1,9 @@
 #!/bin/bash
 
-source "/home/kali/PumaBlackOps/lib/tmux_helpers.sh"
+# Get the base directory of the repo (assume this script is in bin/)
+SCRIPT_DIR="$(dirname "$(readlink -f -- "$0")")"
+REPO_BASE="$(dirname "$SCRIPT_DIR")"
+source "$REPO_BASE/lib/tmux_helpers.sh"
 # Target - Herramienta de gestión de objetivos para pentesting
 # Uso: target <subcomando> [opciones]
 
