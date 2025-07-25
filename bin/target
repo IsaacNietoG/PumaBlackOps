@@ -1,5 +1,6 @@
 #!/bin/bash
 
+source "/home/kali/PumaBlackOps/lib/tmux_helpers.sh"
 # Target - Herramienta de gestión de objetivos para pentesting
 # Uso: target <subcomando> [opciones]
 
@@ -57,11 +58,16 @@ target_add() {
     TARGET_IP=$2
 
     # Crear carpeta de trabajo
-    WORKSPACE_DIR="./$TARGET_NAME"
+    WORKSPACE_DIR="$(pwd)/$TARGET_NAME"
     mkdir -p "$WORKSPACE_DIR"
 
     # Crear archivo .envrc con la IP del target
-    echo "export TARGET=$TARGET_IP" > "$WORKSPACE_DIR/.envrc"
+    echo "export IP=$TARGET_IP" > "$WORKSPACE_DIR/.envrc"
+    echo "export URL=$TARGET_NAME.echocity-f.com" >> "$WORKSPACE_DIR/.envrc"
+    echo "export CTF_WORKSPACE_DIR=$WORKSPACE_DIR" >> "$WORKSPACE_DIR/.envrc"
+
+    # Habilitar la ejecución del direnv
+    direnv allow "$WORKSPACE_DIR"
 
     # Crear un archivo README.md para documentación rápida
     cat <<EOL > "$WORKSPACE_DIR/writeup.md"
@@ -102,6 +108,54 @@ EOL
 
     echo -e "${GREEN}Workspace para $TARGET_NAME creada en $WORKSPACE_DIR${NC}"
     echo -e "${YELLOW}Para cambiar al directorio: cd $WORKSPACE_DIR${NC}"
+
+   ### --- FEATURE TMUX --- ###
+   SESSION_NAME="$TARGET_NAME"
+
+   ## Verificamos si ya existe una sesión para este target
+   if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+	   echo -e "${YELLOW}Sesión de Tmux '$SESSION_NAME' ya existe. Adjuntando...${NC}"
+	   tmux attach-session -t "$SESSION_NAME"
+   else
+	   echo -e "${BLUE}Creando y adjuntando nueva sesión de Tmux '$SESSION_NAME' ...${NC}"
+	   # Primero creamos la sesión (-d: detached | -s: nombre de sesión | -c: directorio)
+	   tmux new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
+	   tmux set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
+	   
+	   # Creamos las ventanas
+	   # 1) RECON
+	   tmux split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
+	   tmux send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
+	   tmux send-keys -t "$SESSION_NAME:1.2" "clear" C-m  
+	   
+	   # Comando para agregar $IP $HOST al /etc/hosts
+	   HOSTS_ENTRY="$TARGET_IP        $TARGET_NAME.echocity-f.com"
+	   if ! grep -q "$HOSTS_ENTRY" /etc/hosts; then
+		   tmux send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
+	   else
+		   tmux display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
+	   fi
+
+           # 2) Exploit
+	   tmux new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
+	   tmux send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
+	   # Enviamos comando de penelope para tenerlo listo
+	   tmux send-keys -t "$SESSION_NAME:2" "penelope -p "
+
+	   # 3) Misc
+	   tmux new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
+	   tmux send-keys -t "$SESSION_NAME:3" "clear" C-m 
+	   
+	   # Nos unimos a la sesión en la primera ventana
+	   tmux select-window -t "$SESSION_NAME:1"
+	   tmux attach-session -t "$SESSION_NAME"
+
+	   
+	   
+	   # Iniciar Cronometro
+	   (sleep 1 && tmux send-keys -t "$SESSION_NAME:1.1" "~/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
+    fi
+
 }
 
 # Función para escanear puertos (target scan ports)
@@ -125,11 +179,26 @@ target_scan_ports() {
         esac
     done
 
+    ## -- Integración Tmux -- ##
+    local current_pane_id
+    if [ -n "$TMUX" ]; then
+        current_pane_id=$(tmux display-message -p '#{pane_id}')
+    fi
+    
+    if [ -n "$current_pane_id" ]; then
+        set_tmux_status_name "$current_pane_id" "󰇑 Nmap Pts:$TARGET_NAME" "original_pane_title"
+    fi
+
     OUTPUT_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
     echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($TARGET)${NC}"
     echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
     nmap -Pn -n -T4 "$TARGET" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
     echo -e "${GREEN}Escaneo de puertos completado. Resultados en: $OUTPUT_FILE${NC}"
+
+    if [ -n "$current_pane_id" ]; then
+        set_tmux_status_name "$current_pane_id" "" "original_pane_title" # "" para restaurar el nombre original
+    fi
+
 }
 
 # Función para escanear servicios/versión (target scan services)
@@ -462,3 +531,4 @@ case "$1" in
         exit 1
         ;;
 esac 
+
