@@ -114,49 +114,53 @@ EOL
 
    ### --- FEATURE TMUX --- ###
    SESSION_NAME="$TARGET_NAME"
+   SERVER_NAME="PumaBlackOps"
+   # Get the tmux config file path relative to the script 
+   TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
 
    ## Verificamos si ya existe una sesión para este target
-   if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+   if tmux -L "$SERVER_NAME" has-session -t "$SESSION_NAME" 2>/dev/null; then
 	   echo -e "${YELLOW}Sesión de Tmux '$SESSION_NAME' ya existe. Adjuntando...${NC}"
-	   tmux attach-session -t "$SESSION_NAME"
+	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
    else
 	   echo -e "${BLUE}Creando y adjuntando nueva sesión de Tmux '$SESSION_NAME' ...${NC}"
-	   # Primero creamos la sesión (-d: detached | -s: nombre de sesión | -c: directorio)
-	   tmux new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
-	   tmux set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
+	   
+	   # Primero creamos la sesión (-d: detached | -s: nombre de sesión | -c: directorio | -f: config file)
+	   tmux -L "$SERVER_NAME" -f "$TMUX_CONFIG" new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
+	   tmux -L "$SERVER_NAME" set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
 	   
 	   # Creamos las ventanas
 	   # 1) RECON
-	   tmux split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
-	   tmux send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
-	   tmux send-keys -t "$SESSION_NAME:1.2" "clear" C-m  
+	   tmux -L "$SERVER_NAME" split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m  
 	   
 	   # Comando para agregar $IP $HOST al /etc/hosts
 	   HOSTS_ENTRY="$TARGET_IP        $TARGET_NAME.echocity-f.com"
 	   if ! grep -q "$HOSTS_ENTRY" /etc/hosts; then
-		   tmux send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
+		   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
 	   else
-		   tmux display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
+		   tmux -L "$SERVER_NAME" display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
 	   fi
 
            # 2) Exploit
-	   tmux new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
-	   tmux send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
+	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
 	   # Enviamos comando de penelope para tenerlo listo
-	   tmux send-keys -t "$SESSION_NAME:2" "penelope -p "
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "penelope -p "
 
 	   # 3) Misc
-	   tmux new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
-	   tmux send-keys -t "$SESSION_NAME:3" "clear" C-m 
+	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3" "clear" C-m 
 	   
 	   # Nos unimos a la sesión en la primera ventana
-	   tmux select-window -t "$SESSION_NAME:1"
-	   tmux attach-session -t "$SESSION_NAME"
+	   tmux -L "$SERVER_NAME" select-window -t "$SESSION_NAME:1"
+	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
 
 	   
 	   
-	   # Iniciar Cronometro
-	   (sleep 1 && tmux send-keys -t "$SESSION_NAME:1.1" "~/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
+	   # Iniciar Cronometro usando la configuración dinámica de tmux
+	   (sleep 1 && tmux send-keys -t "$SESSION_NAME:1.1" "#{@config_dir}/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
     fi
 
 }
