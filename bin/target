@@ -160,7 +160,7 @@ EOL
 	   
 	   
 	   # Iniciar Cronometro usando la configuración dinámica de tmux
-	   (sleep 1 && tmux send-keys -t "$SESSION_NAME:1.1" "#{@config_dir}/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
+	   (sleep 1 && tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "#{@config_dir}/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
     fi
 
 }
