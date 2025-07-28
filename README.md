@@ -1,6 +1,40 @@
 # PumaBlackOps
 
-**PumaBlackOps** es un conjunto de herramientas y scripts Bash para facilitar la gestión de objetivos, automatización de tareas y utilidades comunes en pentesting y CTFs, ahora con integración avanzada de tmux y flujos automáticos para CTF.
+**PumaBlackOps** es un conjunto de herramientas y scripts Bash para facilitar la gestión de objetivos, automatización de tareas y utilidades comunes en pentesting y CTFs, ahora con integración avanzada de tmux, flujos automáticos para CTF, autocompletado inteligente y rutas dinámicas.
+
+## 🚀 Quickstart
+
+```bash
+# 0. Instalar dependencias, esto depende de tu distro
+
+# 1. Clonar e inicializar
+git clone <repo_url> && cd PumaBlackOps
+git submodule update --init --recursive
+
+# 2.1 Agregar la suite a tu PATH:
+./spells/add-bin-to-path.sh
+# (el instalador te preguntará cómo deseas agregarlo a tu PATH)
+
+# 2.2 Instalar autocompletado de comandos:
+./spells/install-completion.sh
+# (si utilizas un archivo de configuración para tu shell, hay instrucciones para instalar esto manualmente, porque sé q es feo que se metan en tus dotfiles jajaj)
+
+# 3. Crear tu primer target y lanzar entorno tmux
+target add vulnbox 192.168.1.100
+
+# 4. Dentro del workspace, escanear y explorar
+target scan all
+target dirsearch 8080
+target note "Encontrado panel admin en /admin"
+```
+
+**Características principales:**
+- ✅ **Gestión automática de workspaces** con variables de entorno
+- ✅ **Sesiones tmux integradas** con paneles preconfigurados (Recon/Exploit/Misc)
+- ✅ **Autocompletado inteligente** con sugerencias contextuales
+- ✅ **Escaneos automatizados** (nmap, ffuf, dirsearch)
+- ✅ **Timer CTF visual** y macros para extracción de flags
+- ✅ **Rutas dinámicas** - funciona desde cualquier ubicación
 
 ## Estructura del repositorio
 
@@ -17,7 +51,11 @@
 ├── spells/
 │   ├── add-bin-to-path.sh
 │   ├── peass-ng.sh
-│   └── penelope.sh
+│   ├── penelope.sh
+│   └── install-completion.sh
+├── completions/
+│   ├── target.bash
+│   └── README.md
 ├── .config/
 │   └── tmux/
 │       ├── tmux.conf
@@ -53,6 +91,13 @@ Scripts Bash para instalar, configurar o facilitar el uso de herramientas, nacen
 - **add-bin-to-path.sh**: Script interactivo para agregar el directorio `bin/` al PATH del usuario de varias formas (temporal, permanente, subshell, symlinks).
 - **peass-ng.sh**: Descarga, compila y coloca una versión personalizada de linPEAS en `bin/ctflinpeas`.
 - **penelope.sh**: Descarga y coloca la herramienta penelope en `bin/penelope`.
+- **install-completion.sh**: Instala automáticamente el autocompletado bash para la herramienta `target`.
+
+### `completions/`
+Scripts de autocompletado para mejorar la experiencia de usuario:
+
+- **target.bash**: Script de autocompletado bash para la herramienta `target` con sugerencias inteligentes y contextuales.
+- **README.md**: Documentación en español sobre la instalación y uso del autocompletado.
 
 ### `aliases/`
 Alias útiles para pentesting y manejo de shells:
@@ -62,7 +107,7 @@ Alias útiles para pentesting y manejo de shells:
 ### `.config/tmux/`
 Configuración avanzada de tmux para flujos de CTF:
 
-- **tmux.conf**: Configuración personalizada de tmux con integración de mouse, atajos para selección de paneles, y plugins para mejorar la experiencia (TPM, tmux-sensible, tmux-resurrect, tmux-yank, dracula theme, etc). Incluye keybindings y macros para extracción de flags y manejo de timers CTF.
+- **tmux.conf**: Configuración personalizada de tmux con integración de mouse, atajos para selección de paneles, y plugins para mejorar la experiencia (TPM, tmux-sensible, tmux-resurrect, tmux-yank, dracula theme, etc). Incluye keybindings y macros para extracción de flags y manejo de timers CTF. **Nueva característica**: Rutas dinámicas que se calculan automáticamente basadas en la ubicación del archivo de configuración.
 - **plugins/**: Plugins de tmux gestionados como submódulos git, necesarios para la funcionalidad extendida (ver sección de instalación).
 
 ### `src/`
@@ -72,7 +117,7 @@ Directorio reservado para código fuente adicional o scripts personalizados.
 
 ## Uso rápido de la herramienta principal: `target`
 
-El script `bin/target` permite gestionar workspaces de pentesting de forma sencilla y ahora automatiza la creación de entornos tmux listos para CTF. Sus subcomandos principales son:
+El script `bin/target` permite gestionar workspaces de pentesting de forma sencilla y ahora automatiza la creación de entornos tmux listos para CTF. **Nueva característica**: Incluye autocompletado inteligente con sugerencias contextuales. Sus subcomandos principales son:
 
 - `add <nombre_maquina> <IP>`: Crea un nuevo workspace para un objetivo, configura variables de entorno, y lanza automáticamente una sesión tmux con paneles para Recon, Exploit y Misc. Además, inicia un timer CTF y prepara comandos útiles en cada panel.
 - `scan <nombre_maquina>`: Ejecuta un escaneo Nmap completo y guarda los resultados. Si se ejecuta dentro de tmux, el panel muestra el estado del escaneo dinámicamente.
@@ -104,6 +149,14 @@ target venv
 target note "Encontrado panel de admin en /admin"
 ```
 
+**Con autocompletado inteligente:**
+```bash
+target <TAB>                    # Muestra todos los comandos disponibles
+target scan <TAB>               # Muestra subcomandos de escaneo
+target info <TAB>               # Lista targets existentes
+target dirsearch target1 <TAB>  # Sugiere puertos comunes
+```
+
 ---
 
 ## Integración avanzada con tmux y plugins
@@ -114,8 +167,17 @@ target note "Encontrado panel de admin en /admin"
   - Integración con plugins: tmux-resurrect (persistencia), tmux-yank (copiado), tmux-sensible, y el theme Dracula.
   - Timer CTF visual y macros para extracción de flags con atajos de teclado.
   - Automatización de la entrada en `/etc/hosts` para el target.
+  - **Nueva característica**: Carga automática del archivo de configuración tmux del proyecto usando rutas dinámicas.
 - El script `target` usa funciones de `lib/tmux_helpers.sh` para cambiar dinámicamente los títulos de paneles/ventanas según el estado de los escaneos.
-- El archivo `.config/tmux/tmux.conf` define atajos y macros útiles para CTF, como extracción de flags, búsqueda de archivos, y control del timer.
+- El archivo `.config/tmux/tmux.conf` define atajos y macros útiles para CTF, como extracción de flags, búsqueda de archivos, y control del timer. **Nueva característica**: Rutas dinámicas que se calculan automáticamente basadas en la ubicación del archivo de configuración.
+
+## Autocompletado inteligente
+
+- **Autocompletado contextual**: Diferentes sugerencias basadas en el comando actual y posición
+- **Detección dinámica de targets**: Automáticamente detecta targets existentes buscando directorios con archivos `.envrc`
+- **Sugerencias de puertos**: Números de puerto comunes para escaneo y búsqueda de directorios
+- **Patrones IP**: Sugerencias de patrones de dirección IP comunes para nuevos targets
+- **Instalación automática**: Script `spells/install-completion.sh` para configuración automática
 
 ---
 
@@ -137,17 +199,22 @@ target note "Encontrado panel de admin en /admin"
    ./spells/add-bin-to-path.sh
    ```
 
-4. (Opcional) Fuentea los alias en tu shell:
+4. (Opcional) Instala el autocompletado bash para una mejor experiencia de usuario:
+   ```bash
+   ./spells/install-completion.sh
+   ```
+
+5. (Opcional) Fuentea los alias en tu shell:
    ```bash
    echo 'source /ruta/a/PumaBlackOps/aliases/general.sh' >> ~/.bashrc
    source ~/.bashrc
    ```
 
-5. Instala direnv para manejo automático de variables de entorno por workspace.
+6. Instala direnv para manejo automático de variables de entorno por workspace.
 
-6. Usa los scripts desde cualquier lugar si tienes el PATH configurado.
+7. Usa los scripts desde cualquier lugar si tienes el PATH configurado.
 
-7. Para aprovechar la integración tmux, asegúrate de tener tmux instalado y copia o enlaza `.config/tmux/tmux.conf` a tu `~/.config/tmux/tmux.conf`.
+8. Para aprovechar la integración tmux, asegúrate de tener tmux instalado. **Nota**: El archivo de configuración tmux se carga automáticamente con rutas dinámicas, por lo que no es necesario copiarlo manualmente.
 
 ---
 
