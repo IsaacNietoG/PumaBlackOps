@@ -2,6 +2,40 @@
 
 **PumaBlackOps** es un conjunto de herramientas y scripts Bash para facilitar la gestión de objetivos, automatización de tareas y utilidades comunes en pentesting y CTFs, ahora con integración avanzada de tmux, flujos automáticos para CTF, autocompletado inteligente y rutas dinámicas.
 
+## 🚀 Quickstart
+
+```bash
+# 0. Instalar dependencias, esto depende de tu distro
+
+# 1. Clonar e inicializar
+git clone <repo_url> && cd PumaBlackOps
+git submodule update --init --recursive
+
+# 2.1 Agregar la suite a tu PATH:
+./spells/add-bin-to-path.sh
+# (el instalador te preguntará cómo deseas agregarlo a tu PATH)
+
+# 2.2 Instalar autocompletado de comandos:
+./spells/install-completion.sh
+# (si utilizas un archivo de configuración para tu shell, hay instrucciones para instalar esto manualmente, porque sé q es feo que se metan en tus dotfiles jajaj)
+
+# 3. Crear tu primer target y lanzar entorno tmux
+target add vulnbox 192.168.1.100
+
+# 4. Dentro del workspace, escanear y explorar
+target scan all
+target dirsearch 8080
+target note "Encontrado panel admin en /admin"
+```
+
+**Características principales:**
+- ✅ **Gestión automática de workspaces** con variables de entorno
+- ✅ **Sesiones tmux integradas** con paneles preconfigurados (Recon/Exploit/Misc)
+- ✅ **Autocompletado inteligente** con sugerencias contextuales
+- ✅ **Escaneos automatizados** (nmap, ffuf, dirsearch)
+- ✅ **Timer CTF visual** y macros para extracción de flags
+- ✅ **Rutas dinámicas** - funciona desde cualquier ubicación
+
 ## Estructura del repositorio
 
 ```
