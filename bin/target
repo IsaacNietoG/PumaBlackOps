@@ -1,6 +1,9 @@
 #!/bin/bash
 
-source "/home/kali/PumaBlackOps/lib/tmux_helpers.sh"
+# Get the base directory of the repo (assume this script is in bin/)
+SCRIPT_DIR="$(dirname "$(readlink -f -- "$0")")"
+REPO_BASE="$(dirname "$SCRIPT_DIR")"
+source "$REPO_BASE/lib/tmux_helpers.sh"
 # Target - Herramienta de gestión de objetivos para pentesting
 # Uso: target <subcomando> [opciones]
 
@@ -111,49 +114,54 @@ EOL
 
    ### --- FEATURE TMUX --- ###
    SESSION_NAME="$TARGET_NAME"
+   SERVER_NAME="PumaBlackOps"
+   # Get the tmux config file path relative to the script 
+   TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
 
    ## Verificamos si ya existe una sesión para este target
-   if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+   if tmux -L "$SERVER_NAME" has-session -t "$SESSION_NAME" 2>/dev/null; then
 	   echo -e "${YELLOW}Sesión de Tmux '$SESSION_NAME' ya existe. Adjuntando...${NC}"
-	   tmux attach-session -t "$SESSION_NAME"
+	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
    else
 	   echo -e "${BLUE}Creando y adjuntando nueva sesión de Tmux '$SESSION_NAME' ...${NC}"
-	   # Primero creamos la sesión (-d: detached | -s: nombre de sesión | -c: directorio)
-	   tmux new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
-	   tmux set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
+	   
+	   # Primero creamos la sesión (-d: detached | -s: nombre de sesión | -c: directorio | -f: config file)
+	   tmux -L "$SERVER_NAME" -f "$TMUX_CONFIG" new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
+	   tmux -L "$SERVER_NAME" set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
 	   
 	   # Creamos las ventanas
 	   # 1) RECON
-	   tmux split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
-	   tmux send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
-	   tmux send-keys -t "$SESSION_NAME:1.2" "clear" C-m  
+	   tmux -L "$SERVER_NAME" split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m 
+	   
 	   
 	   # Comando para agregar $IP $HOST al /etc/hosts
 	   HOSTS_ENTRY="$TARGET_IP        $TARGET_NAME.echocity-f.com"
 	   if ! grep -q "$HOSTS_ENTRY" /etc/hosts; then
-		   tmux send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
+		   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
 	   else
-		   tmux display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
+		   tmux -L "$SERVER_NAME" display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
 	   fi
-
+		
+           # Comando para lanzar target scan
+           tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "target scan ports -s " 
+           		 
            # 2) Exploit
-	   tmux new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
-	   tmux send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
+	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
 	   # Enviamos comando de penelope para tenerlo listo
-	   tmux send-keys -t "$SESSION_NAME:2" "penelope -p "
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "penelope -p "
 
 	   # 3) Misc
-	   tmux new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
-	   tmux send-keys -t "$SESSION_NAME:3" "clear" C-m 
+	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3" "clear" C-m
+	   (tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3.1" "$REPO_BASE/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m && clear C-m)&  
 	   
 	   # Nos unimos a la sesión en la primera ventana
-	   tmux select-window -t "$SESSION_NAME:1"
-	   tmux attach-session -t "$SESSION_NAME"
-
-	   
-	   
-	   # Iniciar Cronometro
-	   (sleep 1 && tmux send-keys -t "$SESSION_NAME:1.1" "~/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
+	   tmux -L "$SERVER_NAME" select-window -t "$SESSION_NAME:1"
+	   tmux -L "$SERVER_NAME" select-pane -U
+	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
     fi
 
 }
@@ -162,6 +170,7 @@ EOL
 target_scan_ports() {
     # Uso: target scan ports [--top-ports N | --all-ports]
     PORT_OPTION="--top-ports 1000"
+    local SCAN_SERVICES=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --top-ports)
@@ -173,11 +182,32 @@ target_scan_ports() {
                 PORT_OPTION="-p-"
                 shift
                 ;;
+            -s|--services)
+            	shift
+            	SCAN_SERVICES=$1
+            	shift
+            	;;
             *)
                 shift
                 ;;
         esac
     done
+    
+    ## -- Ejecución port scan browser -- ##
+    if [ -n "$SCAN_SERVICES" ]; then
+        local PYTHON_SCRIPT="$REPO_BASE/lib/port_scan_browser.py"
+        echo -e "${BLUE}Iniciando escaneo rápido con script externo para encontrar $SCAN_SERVICES servicios...${NC}"
+        
+        if [ -f "$PYTHON_SCRIPT" ]; then
+            # Pasa el número como argumento -t al script de Python
+            python3 "$PYTHON_SCRIPT" -s "$SCAN_SERVICES"
+        else
+            echo -e "${RED}Error: No se encontró el script en $PYTHON_SCRIPT${NC}"
+        fi
+        
+        # Salimos de la función para no ejecutar el nmap normal
+        return 0
+    fi
 
     ## -- Integración Tmux -- ##
     local current_pane_id
@@ -190,9 +220,9 @@ target_scan_ports() {
     fi
 
     OUTPUT_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
-    echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($TARGET)${NC}"
-    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
-    nmap -Pn -n -T4 "$TARGET" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
+    echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($IP)${NC}"
+    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $IP --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
+    nmap -Pn -n -T4 "$IP" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
     echo -e "${GREEN}Escaneo de puertos completado. Resultados en: $OUTPUT_FILE${NC}"
 
     if [ -n "$current_pane_id" ]; then
@@ -215,9 +245,9 @@ target_scan_services() {
         echo -e "${YELLOW}No se detectaron puertos abiertos en $PORTS_FILE. No se realizará escaneo de servicios.${NC}"
         exit 0
     fi
-    echo -e "${BLUE}Iniciando escaneo de servicios/versión para $TARGET_NAME ($TARGET) en puertos: $OPEN_PORTS${NC}"
-    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET -sCV -oN $OUTPUT_FILE -p $OPEN_PORTS${NC}"
-    nmap -Pn -n -T4 "$TARGET" -sCV -oN "$OUTPUT_FILE" -p "$OPEN_PORTS"
+    echo -e "${BLUE}Iniciando escaneo de servicios/versión para $TARGET_NAME ($IP) en puertos: $OPEN_PORTS${NC}"
+    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $IP -sCV -oN $OUTPUT_FILE -p $OPEN_PORTS${NC}"
+    nmap -Pn -n -T4 "$IP" -sCV -oN "$OUTPUT_FILE" -p "$OPEN_PORTS"
     echo -e "${GREEN}Escaneo de servicios completado. Resultados en: $OUTPUT_FILE${NC}"
 }
 
@@ -253,8 +283,8 @@ main_target_scan() {
         echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
         exit 1
     fi
-    if [ -z "$TARGET" ]; then
-        echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
+    if [ -z "$IP" ]; then
+        echo -e "${RED}Error: Variable IP no definida en .envrc${NC}"
         exit 1
     fi
     case "$MODE" in
@@ -284,7 +314,7 @@ target_list() {
         if [ -d "$dir" ] && [ -f "$dir/.envrc" ]; then
             TARGET_NAME=$(basename "$dir")
             source "$dir/.envrc"
-            echo -e "${GREEN}• $TARGET_NAME${NC} - $TARGET"
+            echo -e "${GREEN}• $TARGET_NAME${NC} - $IP"
         fi
     done
 }
@@ -312,7 +342,7 @@ target_info() {
     
     if [ -f "$WORKSPACE_DIR/.envrc" ]; then
         source "$WORKSPACE_DIR/.envrc"
-        echo -e "${GREEN}IP:${NC} $TARGET"
+        echo -e "${GREEN}IP:${NC} $IP"
     fi
     
     if [ -f "$WORKSPACE_DIR/writeup.md" ]; then
@@ -397,8 +427,8 @@ target_dirsearch() {
         exit 1
     fi
 
-    if [ -z "$TARGET" ]; then
-        echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
+    if [ -z "$IP" ]; then
+        echo -e "${RED}Error: Variable IP no definida en .envrc${NC}"
         exit 1
     fi
 
@@ -410,11 +440,11 @@ target_dirsearch() {
 
     # Construir URL
     if [ "$PORT" = "80" ]; then
-        URL="http://$TARGET/"
+        URL="http://$IP/"
     elif [ "$PORT" = "443" ]; then
-        URL="https://$TARGET/"
+        URL="https://$IP/"
     else
-        URL="http://$TARGET:$PORT/"
+        URL="http://$IP:$PORT/"
     fi
 
     # Diccionario por defecto
@@ -531,4 +561,3 @@ case "$1" in
         exit 1
         ;;
 esac 
-
