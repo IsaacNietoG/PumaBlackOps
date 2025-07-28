@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# --- Configuración ---
+FOOTHOLD_LIMIT=2700; PRIVILESC_LIMIT=1200; BLINK_THRESHOLD_SECONDS=60
+EMOJI_FOOTHOLD="👣"; EMOJI_ESCALATION="🪜"; EMOJI_TOTAL="⏱️"; EMOJI_PAUSED="⏸️"; TEXT_HEADSHOT="💀 HEADSHOT"
+CTF_STATE_FILE=""
+
+# --- Funciones Auxiliares ---
+get_tmux_option() { local o="$1" d="$2"; local v=$(tmux show-option -gqv "$o"); if [ -z "$v" ]; then echo "$d"; else echo "$v"; fi; }
+_init_workspace_dir() { local d=$(tmux display-message -p '#{session_environment:CTF_WORKSPACE_DIR_TMUX}' 2>/dev/null|tr -d '\n'); if [[ -z "$d" ]]; then return 1; fi; CTF_STATE_FILE="$d/.timer_state"; }
+read_state() { if [[ ! -f "$CTF_STATE_FILE" ]]; then return 1; fi; source "$CTF_STATE_FILE"; }
+format_time() { local s=$1; if (( s < 0 )); then s=0; fi; printf "%02d:%02d:%02d" $((s/3600)) $(((s%3600)/60)) $((s%60)); }
+
+# --- Lógica Principal del Plugin ---
+main() {
+    # Argumento 1: Color del vecino izquierdo. Argumento 2: Color del fondo de la barra.
+    local neighbor_bg_color=${1:-default}
+    local status_bg_color=${2:-default}
+
+    _init_workspace_dir || { echo ""; return; }
+    read_state || { echo ""; return; }
+
+    # Cargar Colores
+    local bg_foothold=$(get_tmux_option "@dracula-timer-foothold-color" "cyan")
+    local bg_escalation=$(get_tmux_option "@dracula-timer-escalation-color" "orange")
+    local bg_headshot=$(get_tmux_option "@dracula-timer-headshot-color" "green")
+    local bg_paused=$(get_tmux_option "@dracula-timer-paused-color" "yellow")
+    local bg_limit=$(get_tmux_option "@dracula-timer-limit-color" "red")
+    local text_color=$(get_tmux_option "@dracula-timer-colors" "dark_purple dark_gray" | awk '{print $2}')
+    local bg_default=$(get_tmux_option "@dracula-timer-colors" "dark_purple dark_gray" | awk '{print $1}')
+    
+    local current_time=$(date +%s); local output_text=""; local final_bg_color="$bg_default"; local blink_attr=""
+
+    # Lógica para determinar estado y color
+    if [[ "$TIMER_PAUSED" -eq 1 ]]; then
+        final_bg_color="$bg_paused"; output_text="${EMOJI_PAUSED} $(format_time "$PHASE_PAUSED_DURATION") | ${EMOJI_TOTAL} $(format_time "$TOTAL_PAUSED_DURATION")"
+    elif [[ "$TIMER_PHASE" -eq 2 ]]; then
+        final_bg_color="$bg_headshot"; output_text="${TEXT_HEADSHOT} | $(format_time "$TOTAL_ELAPSED_AT_HEADSHOT")"
+    else 
+        local phase_elapsed=$((current_time - PHASE_START_TIME)); local total_elapsed=$((current_time - TOTAL_START_TIME))
+        case $TIMER_PHASE in
+            0) final_bg_color="$bg_foothold"; output_text="${EMOJI_FOOTHOLD} $(format_time "$phase_elapsed") | ${EMOJI_TOTAL} $(format_time "$total_elapsed")"
+                if (( phase_elapsed > FOOTHOLD_LIMIT )); then final_bg_color="$bg_limit"; if (( (phase_elapsed - FOOTHOLD_LIMIT) / BLINK_THRESHOLD_SECONDS % 2 == 0 )); then blink_attr="#[blink]"; fi; fi;;
+            1) final_bg_color="$bg_escalation"; output_text="${EMOJI_ESCALATION} $(format_time "$phase_elapsed") | ${EMOJI_TOTAL} $(format_time "$total_elapsed")"
+                if (( phase_elapsed > PRIVILESC_LIMIT )); then final_bg_color="$bg_limit"; if (( (phase_elapsed - PRIVILESC_LIMIT) / BLINK_THRESHOLD_SECONDS % 2 == 0 )); then blink_attr="#[blink]"; fi; fi;;
+        esac
+    fi
+    
+    # --- Generar la Salida Final con AMBOS separadores ---
+    local left_sep=""
+    local right_sep=""
+
+    # Parte 1: El separador izquierdo.
+    # El color del dibujo (fg) es el fondo del vecino, creando la ilusión de corte.
+    # El fondo (bg) es el de nuestro banner.
+    local left_part="#[fg=${final_bg_color}]${left_sep}"
+    
+    # Parte 2: El contenido del banner.
+    local middle_part="#[bg=${final_bg_color},fg=${text_color}]${blink_attr} ${output_text//|/|}"
+    
+    # Parte 3: El separador derecho. Dibuja una flecha que "apunta" hacia el fondo de la barra.
+    local right_part="#[fg=${final_bg_color},bg=${status_bg_color}]"
+
+    echo "${left_part}${middle_part}"
+}
+
+# --- Funciones de Control y Dispatcher ---
+save_state() { if [[ -z "$CTF_STATE_FILE" ]]; then return; fi; mkdir -p "$(dirname "$CTF_STATE_FILE")"; cat > "$CTF_STATE_FILE" << EOF
+TIMER_PHASE=$TIMER_PHASE;PHASE_START_TIME=$PHASE_START_TIME;PHASE_PAUSED_DURATION=$PHASE_PAUSED_DURATION
+TOTAL_START_TIME=$TOTAL_START_TIME;TOTAL_PAUSED_DURATION=$TOTAL_PAUSED_DURATION;TIMER_PAUSED=$TIMER_PAUSED
+TOTAL_ELAPSED_AT_HEADSHOT=$TOTAL_ELAPSED_AT_HEADSHOT;PHASE_ELAPSED_AT_HEADSHOT=$PHASE_ELAPSED_AT_HEADSHOT
+EOF
+}
+
+timer_start() {
+    _init_workspace_dir || return 1
+
+    # --- AÑADIDO: Verificar si el timer ya está activo ---
+    if [[ -f "$CTF_STATE_FILE" ]]; then
+        tmux display-message -d 500 "⏱️ El timer ya está corriendo."
+        return 1 # Sale de la función para no reiniciar
+    fi
+    # ----------------------------------------------------
+
+    # Si el archivo no existe, procede a iniciar como siempre
+    TIMER_PHASE=0
+    PHASE_START_TIME=$(date +%s)
+    PHASE_PAUSED_DURATION=0
+    TOTAL_START_TIME=$(date +%s)
+    TOTAL_PAUSED_DURATION=0
+    TIMER_PAUSED=0
+    TOTAL_ELAPSED_AT_HEADSHOT=0
+    PHASE_ELAPSED_AT_HEADSHOT=0
+    save_state
+    tmux display-message -d 500 "⏱️ Timer iniciado!"
+    tmux refresh-client -S
+}
+
+timer_pause() { _init_workspace_dir||return 1; read_state||return 1; local ct=$(date +%s); if [[ "$TIMER_PAUSED" -eq 0 ]]; then if [[ "$TIMER_PHASE" -eq 2 ]]; then return; fi; TIMER_PAUSED=1; PHASE_PAUSED_DURATION=$((ct - PHASE_START_TIME)); TOTAL_PAUSED_DURATION=$((ct - TOTAL_START_TIME)); else TIMER_PAUSED=0; PHASE_START_TIME=$((ct - PHASE_PAUSED_DURATION)); TOTAL_START_TIME=$((ct - TOTAL_PAUSED_DURATION)); PHASE_PAUSED_DURATION=0; TOTAL_PAUSED_DURATION=0; fi; save_state; tmux refresh-client -S; }
+timer_next_phase() { _init_workspace_dir||return 1; read_state||return 1; local ct=$(date +%s); if [[ "$TIMER_PHASE" -eq 2 ]]; then return; fi; if [[ "$TIMER_PHASE" -eq 1 ]]; then TOTAL_ELAPSED_AT_HEADSHOT=$((ct - TOTAL_START_TIME)); PHASE_ELAPSED_AT_HEADSHOT=$((ct - PHASE_START_TIME)); fi; TIMER_PHASE=$((TIMER_PHASE + 1)); PHASE_START_TIME=$ct; PHASE_PAUSED_DURATION=0; TIMER_PAUSED=0; save_state; tmux refresh-client -S; }
+
+case "$1" in
+    start) timer_start ;;
+    pause) timer_pause ;;
+    next)  timer_next_phase ;;
+    *) main "$1" "$2" ;;
+esac

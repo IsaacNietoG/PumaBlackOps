@@ -133,7 +133,8 @@ EOL
 	   # 1) RECON
 	   tmux -L "$SERVER_NAME" split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
 	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m  
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m 
+
 	   
 	   # Comando para agregar $IP $HOST al /etc/hosts
 	   HOSTS_ENTRY="$TARGET_IP        $TARGET_NAME.echocity-f.com"
@@ -142,7 +143,10 @@ EOL
 	   else
 		   tmux -L "$SERVER_NAME" display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
 	   fi
-
+		
+           # Comando para lanzar target scan
+           tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "target scan ports -s " 
+           		 
            # 2) Exploit
 	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
 	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
@@ -151,24 +155,21 @@ EOL
 
 	   # 3) Misc
 	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3" "clear" C-m 
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3" "clear" C-m
+	   (tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3.1" "$REPO_BASE/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m && clear C-m)&  
 	   
 	   # Nos unimos a la sesión en la primera ventana
 	   tmux -L "$SERVER_NAME" select-window -t "$SESSION_NAME:1"
+	   tmux -L "$SERVER_NAME" select-pane -U
 	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
-
-	   
-	   
-	   # Iniciar Cronometro usando la configuración dinámica de tmux
-	   (sleep 1 && tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "#{@config_dir}/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
     fi
-
 }
 
 # Función para escanear puertos (target scan ports)
 target_scan_ports() {
     # Uso: target scan ports [--top-ports N | --all-ports]
     PORT_OPTION="--top-ports 1000"
+    local SCAN_SERVICES=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --top-ports)
@@ -180,11 +181,32 @@ target_scan_ports() {
                 PORT_OPTION="-p-"
                 shift
                 ;;
+            -s|--services)
+            	shift
+            	SCAN_SERVICES=$1
+            	shift
+            	;;
             *)
                 shift
                 ;;
         esac
     done
+    
+    ## -- Ejecución port scan browser -- ##
+    if [ -n "$SCAN_SERVICES" ]; then
+        local PYTHON_SCRIPT="$REPO_BASE/lib/port_scan_browser.py"
+        echo -e "${BLUE}Iniciando escaneo rápido con script externo para encontrar $SCAN_SERVICES servicios...${NC}"
+        
+        if [ -f "$PYTHON_SCRIPT" ]; then
+            # Pasa el número como argumento -t al script de Python
+            python3 "$PYTHON_SCRIPT" -s "$SCAN_SERVICES"
+        else
+            echo -e "${RED}Error: No se encontró el script en $PYTHON_SCRIPT${NC}"
+        fi
+        
+        # Salimos de la función para no ejecutar el nmap normal
+        return 0
+    fi
 
     ## -- Integración Tmux -- ##
     local current_pane_id
@@ -197,9 +219,9 @@ target_scan_ports() {
     fi
 
     OUTPUT_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
-    echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($TARGET)${NC}"
-    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
-    nmap -Pn -n -T4 "$TARGET" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
+    echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($IP)${NC}"
+    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $IP --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
+    nmap -Pn -n -T4 "$IP" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
     echo -e "${GREEN}Escaneo de puertos completado. Resultados en: $OUTPUT_FILE${NC}"
 
     if [ -n "$current_pane_id" ]; then
@@ -222,9 +244,9 @@ target_scan_services() {
         echo -e "${YELLOW}No se detectaron puertos abiertos en $PORTS_FILE. No se realizará escaneo de servicios.${NC}"
         exit 0
     fi
-    echo -e "${BLUE}Iniciando escaneo de servicios/versión para $TARGET_NAME ($TARGET) en puertos: $OPEN_PORTS${NC}"
-    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $TARGET -sCV -oN $OUTPUT_FILE -p $OPEN_PORTS${NC}"
-    nmap -Pn -n -T4 "$TARGET" -sCV -oN "$OUTPUT_FILE" -p "$OPEN_PORTS"
+    echo -e "${BLUE}Iniciando escaneo de servicios/versión para $TARGET_NAME ($IP) en puertos: $OPEN_PORTS${NC}"
+    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $IP -sCV -oN $OUTPUT_FILE -p $OPEN_PORTS${NC}"
+    nmap -Pn -n -T4 "$IP" -sCV -oN "$OUTPUT_FILE" -p "$OPEN_PORTS"
     echo -e "${GREEN}Escaneo de servicios completado. Resultados en: $OUTPUT_FILE${NC}"
 }
 
@@ -260,8 +282,8 @@ main_target_scan() {
         echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
         exit 1
     fi
-    if [ -z "$TARGET" ]; then
-        echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
+    if [ -z "$IP" ]; then
+        echo -e "${RED}Error: Variable IP no definida en .envrc${NC}"
         exit 1
     fi
     case "$MODE" in
@@ -291,7 +313,7 @@ target_list() {
         if [ -d "$dir" ] && [ -f "$dir/.envrc" ]; then
             TARGET_NAME=$(basename "$dir")
             source "$dir/.envrc"
-            echo -e "${GREEN}• $TARGET_NAME${NC} - $TARGET"
+            echo -e "${GREEN}• $TARGET_NAME${NC} - $IP"
         fi
     done
 }
@@ -319,7 +341,7 @@ target_info() {
     
     if [ -f "$WORKSPACE_DIR/.envrc" ]; then
         source "$WORKSPACE_DIR/.envrc"
-        echo -e "${GREEN}IP:${NC} $TARGET"
+        echo -e "${GREEN}IP:${NC} $IP"
     fi
     
     if [ -f "$WORKSPACE_DIR/writeup.md" ]; then
@@ -404,8 +426,8 @@ target_dirsearch() {
         exit 1
     fi
 
-    if [ -z "$TARGET" ]; then
-        echo -e "${RED}Error: Variable TARGET no definida en .envrc${NC}"
+    if [ -z "$IP" ]; then
+        echo -e "${RED}Error: Variable IP no definida en .envrc${NC}"
         exit 1
     fi
 
@@ -417,11 +439,11 @@ target_dirsearch() {
 
     # Construir URL
     if [ "$PORT" = "80" ]; then
-        URL="http://$TARGET/"
+        URL="http://$IP/"
     elif [ "$PORT" = "443" ]; then
-        URL="https://$TARGET/"
+        URL="https://$IP/"
     else
-        URL="http://$TARGET:$PORT/"
+        URL="http://$IP:$PORT/"
     fi
 
     # Diccionario por defecto
@@ -538,4 +560,3 @@ case "$1" in
         exit 1
         ;;
 esac 
-
