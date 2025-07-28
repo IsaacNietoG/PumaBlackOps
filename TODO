@@ -1,11 +1,6 @@
 # Lista de features para implementar
-
-## nuevas features
-- Funcion para activar VPN rapidamente
-
-## Tmux
-- Timers en tmux
-- Macro para extraer las banderas automáticamente
-
 ## target-dirsearch
 - dirsearch usando dirsearch si existe, ffuf como fallback
+
+## target-scan
+- Buscar forma de ejecutar ports sin root

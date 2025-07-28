@@ -134,7 +134,7 @@ EOL
 	   tmux -L "$SERVER_NAME" split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
 	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
 	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m 
-	   
+
 	   
 	   # Comando para agregar $IP $HOST al /etc/hosts
 	   HOSTS_ENTRY="$TARGET_IP        $TARGET_NAME.echocity-f.com"
@@ -163,7 +163,6 @@ EOL
 	   tmux -L "$SERVER_NAME" select-pane -U
 	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
     fi
-
 }
 
 # Función para escanear puertos (target scan ports)
