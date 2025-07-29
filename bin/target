@@ -115,8 +115,17 @@ EOL
    ### --- FEATURE TMUX --- ###
    SESSION_NAME="$TARGET_NAME"
    SERVER_NAME="PumaBlackOps"
-   # Get the tmux config file path relative to the script 
-   TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
+   
+   # Generate tmux config with hardcoded paths
+   echo -e "${BLUE}Generating tmux configuration...${NC}"
+   if [ -f "$REPO_BASE/lib/generate-tmux-config.sh" ]; then
+       bash "$REPO_BASE/lib/generate-tmux-config.sh"
+       TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
+       echo -e "${GREEN}Tmux configuration generated successfully!${NC}"
+   else
+       echo -e "${YELLOW}Warning: tmux config generator not found at $REPO_BASE/lib/generate-tmux-config.sh${NC}"
+       TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
+   fi
 
    ## Verificamos si ya existe una sesión para este target
    if tmux -L "$SERVER_NAME" has-session -t "$SESSION_NAME" 2>/dev/null; then
