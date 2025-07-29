@@ -22,11 +22,14 @@ bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection-and-cancel \;
 set-option -g status-interval 1
 
 #### --- PLUGINS --- ####
-set -g @plugin 'tmux-plugins/tpm'
-set -g @plugin 'tmux-plugins/tmux-sensible'
-set -g @plugin 'tmux-plugins/tmux-resurrect'
-set -g @plugin 'tmux-plugins/tmux-yank'
-set -g @plugin 'dracula/tmux' 
+# List of plugins (alternative syntax for custom config files)
+set -g @tpm_plugins '          \
+  tmux-plugins/tpm             \
+  tmux-plugins/tmux-sensible   \
+  tmux-plugins/tmux-resurrect  \
+  tmux-plugins/tmux-yank       \
+  dracula/tmux                 \
+'
 
 ### --- Ajustes Dracula --- ###
 set -g @dracula-show-powerline true
@@ -47,9 +50,6 @@ set -g @dracula-timer-paused-color "white"     # Texto cuando está pausado
 set -g @dracula-plugins "ctf-timer vpn-status"
 
 #### - KEY BINDINGS - ####
-
-# Debug: Show all variables (Ctrl+b + d)
-bind-key d display-message "Plugin path: #{TMUX_PLUGIN_MANAGER_PATH}"
 
 # Puedes usar Alt+tecla (M-) si prefieres, quitando el 'bind-key' y añadiendo '-n M-':
 # Uses hardcoded plugin paths
@@ -72,5 +72,5 @@ bind-key M-e send-keys "echo;find / -xdev \\( -path /proc -o -path /sys -o -path
 bind-key M-E send-keys "echo;P='ETSCTF_[0-9a-fA-F]{32}';(for F in env /etc/passwd /proc/1/environ /etc/shadow /root/;do V=\$( (case \$F in env)env;;/proc/1/environ)tr '\\0' '\\n'<\$F;;/root/)ls \$F;;*)cat \$F;;esac)2>/dev/null|grep -oE \"\$P\" );[ -n \"\$V\" ]&&printf \"%-17s %s\\n\" \"\$F:\" \"\$V\";done);echo ---;(find / -xdev \\( -path /proc -o -path /sys -o -path /dev -o -path /run -o -path /etc \\) -prune -o -type f -print0 2>/dev/null|xargs -0 grep -HaoE \"\$P\" 2>/dev/null|awk -F':' '{printf \"%-30s %s\\n\",\$1,\$2}');echo ---;(find / -xdev \\( -path /proc -o -path /sys -o -path /dev -o -path /run -o -path /etc \\) -prune -o -name \"*ETSCTF_*\" -print 2>/dev/null);echo" C-m
 
 #### --- RUNS --- ####
-# Uses hardcoded TPM path
+# Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
 run 'PLUGIN_DIR_PLACEHOLDER/tpm/tpm' 
