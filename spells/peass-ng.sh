@@ -29,7 +29,7 @@ REPO_URL="https://github.com/IsaacNietoG/PEASS-ng"
 TEMP_DIR="/tmp/peass-ng-build"
 BUILD_SCRIPT="./buildCustom.sh"
 OUTPUT_FILE="/tmp/linpeas_ctf.sh"
-BIN_DIR="$(cd "$(dirname "$0")" && pwd)/../bin"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)/../assaultrepository"
 TARGET_NAME="ctflinpeas"
 
 print_status "Starting PEASS-ng spell..."
