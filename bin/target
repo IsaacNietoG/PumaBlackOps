@@ -110,7 +110,6 @@ EOL
     fi
 
     echo -e "${GREEN}Workspace para $TARGET_NAME creada en $WORKSPACE_DIR${NC}"
-    echo -e "${YELLOW}Para cambiar al directorio: cd $WORKSPACE_DIR${NC}"
 
    ### --- FEATURE TMUX --- ###
    SESSION_NAME="$TARGET_NAME"
