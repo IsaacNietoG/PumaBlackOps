@@ -114,7 +114,16 @@ EOL
 
    ### --- FEATURE TMUX --- ###
    SESSION_NAME="$TARGET_NAME"
-   SERVER_NAME="PumaBlackOps"
+   
+   # Determine SERVER_NAME based on active tmux sessions
+   if tmux list-sessions 2>/dev/null | grep -q .; then
+       SERVER_NAME="PumaBlackOps"
+       echo -e "${BLUE}Se han encontrado otras sesiones de Tmux, para evitar conflictos se ha establecido el nombre del socket en $SERVER_NAME${NC}"
+       echo -e "${YELLOW}Nota: Puedes buscar esta sesión usando: tmux -L $SERVER_NAME list-sessions${NC}"
+   else
+       SERVER_NAME="default"
+       echo -e "${BLUE}No se han encontrado otras sesiones de Tmux, se ha establecido el nombre del socket en $SERVER_NAME${NC}"
+   fi
    
    # Generate tmux config with hardcoded paths
    echo -e "${BLUE}Generating tmux configuration...${NC}"
