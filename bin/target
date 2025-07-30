@@ -113,11 +113,44 @@ EOL
 
    ### --- FEATURE TMUX --- ###
    SESSION_NAME="$TARGET_NAME"
+   cd "$WORKSPACE_DIR/.."
    
    # Determine SERVER_NAME based on active tmux sessions
-   if tmux list-sessions 2>/dev/null | grep -q .; then
+   # Check if there are any non-target sessions (sessions not created by our tool)
+   EXISTING_SESSIONS=$(tmux list-sessions 2>/dev/null | cut -d: -f1 || echo "")
+   TARGET_SESSIONS_ONLY=true
+   
+   if [ -n "$EXISTING_SESSIONS" ]; then
+       # Check each session to see if they're all target sessions
+       while IFS= read -r session; do
+           if [ -n "$session" ]; then
+               # Check if this session exists in any of our target directories
+               SESSION_EXISTS_IN_TARGET=false
+               for target_dir in */; do
+                   if [ -d "$target_dir" ] && [ -f "$target_dir/.envrc" ]; then
+                       target_name=$(basename "$target_dir")
+                       if [ "$session" = "$target_name" ]; then
+                           SESSION_EXISTS_IN_TARGET=true
+                           break
+                       fi
+                   fi
+               done
+               
+               # If any session is not a target session, we need to use PumaBlackOps
+               if [ "$SESSION_EXISTS_IN_TARGET" = false ]; then
+                   TARGET_SESSIONS_ONLY=false
+                   break
+               fi
+           fi
+       done <<< "$EXISTING_SESSIONS"
+   fi
+   
+   if [ "$TARGET_SESSIONS_ONLY" = true ] && [ -n "$EXISTING_SESSIONS" ]; then
+       SERVER_NAME="default"
+       echo -e "${BLUE}Todas las sesiones existentes son targets creados por esta herramienta. Usando socket: $SERVER_NAME${NC}"
+   elif [ -n "$EXISTING_SESSIONS" ]; then
        SERVER_NAME="PumaBlackOps"
-       echo -e "${BLUE}Se han encontrado otras sesiones de Tmux, para evitar conflictos se ha establecido el nombre del socket en $SERVER_NAME${NC}"
+       echo -e "${BLUE}Se han encontrado sesiones de Tmux que, o no son relacionadas con targets, o la lógica de esta herramienta no está diseñada para manejarlas. Para evitar conflictos se ha establecido el nombre del socket en $SERVER_NAME${NC}"
        echo -e "${YELLOW}Nota: Puedes buscar esta sesión usando: tmux -L $SERVER_NAME list-sessions${NC}"
    else
        SERVER_NAME="default"
