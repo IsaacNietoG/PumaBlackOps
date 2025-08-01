@@ -21,9 +21,6 @@ git submodule update --init --recursive
 ./spells/install-completion.sh
 # (si utilizas un archivo de configuración para tu shell, hay instrucciones para instalar esto manualmente, porque sé q es feo que se metan en tus dotfiles jajaj)
 
-# 2.3 (Opcional) Cargar aliases del proyecto:
-./spells/source-aliases.sh
-
 # 3. Crear tu primer target y lanzar entorno tmux
 target add vulnbox 192.168.1.100
 
@@ -97,18 +94,19 @@ Contiene herramientas principales y utilidades ejecutables:
 
 - **target**: Script Bash principal para la gestión de workspaces de pentesting. Ahora automatiza la creación de sesiones tmux, paneles y flujos de trabajo para CTF.
 - **assaultRepository**: **NUEVO** - Servidor HTTP para compartir herramientas de pentesting. Permite iniciar/detener un servidor HTTP que sirve archivos desde el directorio `assaultrepository/`, ideal para transferir herramientas a máquinas objetivo.
-- **ctflinpeas**: Binario generado por el script `spells/peass-ng.sh`, versión personalizada de linPEAS para enumeración de privilegios en Linux.
 - **penelope**: Script Python descargado por `spells/penelope.sh`, herramienta para automatizar tareas de post-explotación y manejo de shells.
 
 ### `assaultrepository/`
 **NUEVO** - Directorio que contiene herramientas de pentesting compartidas a través del servidor HTTP. Las herramientas se pueden agregar usando `assaultRepository add` y se sirven automáticamente cuando se inicia el servidor.
+- **ctflinpeas**: Binario generado por el script `spells/peass-ng.sh`, versión personalizada de linPEAS para enumeración de privilegios en Linux.
+- **pspy64**: Binario generado por el script `spells/pspy64.sh`, es una herramienta para inspeccionar procesos en ejecución en sistemas linux sin permisos de root.
 
 ### `lib/`
 Scripts auxiliares para funcionalidades:
 
 - **tmux_helpers.sh**: Funciones Bash para manipular títulos de paneles/ventanas y obtener información de tmux, usadas por el script `target` para integración avanzada.
-- **generate-tmux-config.sh**: **NUEVO** - Script para generar configuraciones de tmux dinámicamente.
-- **port_scan_browser.py**: **NUEVO** - Script Python para navegar por resultados de escaneo de puertos.
+- **generate-tmux-config.sh**: **NUEVO** - Script para generar configuraciones de tmux dinámicamente. Es utilizado por `target` para invocar las sesiones de tmux
+- **port_scan_browser.py**: **NUEVO** - Script Python para navegar por resultados de escaneo de puertos. Es utilizado por `target` para el comando target scan ports -s
 - **tmux-config.template**: **NUEVO** - Plantilla para configuraciones de tmux.
 
 ### `spells/`
@@ -247,48 +245,6 @@ chmod +x pspy64
 - **Sugerencias de puertos**: Números de puerto comunes para escaneo y búsqueda de directorios
 - **Patrones IP**: Sugerencias de patrones de dirección IP comunes para nuevos targets
 - **Instalación automática**: Script `spells/install-completion.sh` para configuración automática
-
----
-
-## Instalación y configuración
-
-1. Clona el repositorio y entra en la carpeta:
-   ```bash
-   git clone <repo_url>
-   cd PumaBlackOps
-   ```
-
-2. Inicializa los submódulos de plugins de tmux:
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-3. (Opcional) Ejecuta el script para agregar los binarios al PATH:
-   ```bash
-   ./spells/add-bin-to-path.sh
-   ```
-
-4. (Opcional) Instala el autocompletado bash para una mejor experiencia de usuario:
-   ```bash
-   ./spells/install-completion.sh
-   ```
-
-5. (Opcional) Carga los aliases del proyecto:
-   ```bash
-   ./spells/source-aliases.sh
-   ```
-
-6. (Opcional) Instala herramientas adicionales:
-   ```bash
-   # Instalar pspy64 en el repositorio HTTP
-   ./spells/pspy64.sh
-   ```
-
-7. Instala direnv para manejo automático de variables de entorno por workspace.
-
-8. Usa los scripts desde cualquier lugar si tienes el PATH configurado.
-
-9. Para aprovechar la integración tmux, asegúrate de tener tmux instalado. **Nota**: El archivo de configuración tmux se carga automáticamente con rutas dinámicas, por lo que no es necesario copiarlo manualmente.
 
 ---
 
