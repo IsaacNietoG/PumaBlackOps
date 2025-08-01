@@ -5,10 +5,12 @@
 ## 🚀 Quickstart
 
 ```bash
-# 0. Instalar dependencias, esto depende de tu distro
+# 0. Instalar dependencias. -ESTO DEPENDE DE TU DISTRO, pero si usas Kali o alguna otra distro con apt:
+sudo apt update
+sudo apt install tmux ffuf nmap seclists jq xclip direnv
 
 # 1. Clonar e inicializar
-git clone <repo_url> && cd PumaBlackOps
+git clone https://github.com/IsaacNietoG/PumaBlackOps && cd PumaBlackOps
 git submodule update --init --recursive
 
 # 2.1 Agregar la suite a tu PATH:
