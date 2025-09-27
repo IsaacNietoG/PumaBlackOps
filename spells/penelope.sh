@@ -2,6 +2,7 @@
 
 # Penelope Spell
 # Downloads penelope.py tool and sets it up in bin folder
+# Now it uses the customized version by @DystopianRescuer
 
 set -e  # Exit on any error
 
@@ -25,7 +26,7 @@ print_error() {
 }
 
 # Configuration
-PENELOPE_URL="https://raw.githubusercontent.com/brightio/penelope/refs/heads/main/penelope.py"
+PENELOPE_URL="https://raw.githubusercontent.com/DystopianRescuer/penelope/refs/heads/main/penelope.py"
 TEMP_DIR="/tmp/penelope-download"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)/../bin"
 TARGET_NAME="penelope"
@@ -60,4 +61,4 @@ print_status "Successfully installed penelope to $BIN_DIR/$TARGET_NAME"
 print_status "Cleaning up temporary files..."
 rm -rf "$TEMP_DIR"
 
-print_status "Penelope spell completed successfully!" 
+print_status "Penelope spell completed successfully!"
