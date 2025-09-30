@@ -202,7 +202,7 @@ EOL
 	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
 	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
 	   # Enviamos comando de penelope para tenerlo listo
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "penelope -p "
+	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "penelope -p 9000"
 
 	   # 3) Misc
 	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
