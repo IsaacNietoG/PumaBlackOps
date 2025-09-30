@@ -30,6 +30,7 @@ PENELOPE_URL="https://raw.githubusercontent.com/DystopianRescuer/penelope/refs/h
 TEMP_DIR="/tmp/penelope-download"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)/../bin"
 TARGET_NAME="penelope"
+MODULES_DIR="$HOME/.penelope/modules/"
 
 print_status "Starting Penelope spell..."
 
@@ -54,6 +55,12 @@ print_status "Installing penelope to bin directory..."
 mkdir -p "$BIN_DIR"
 cp "penelope.py" "$BIN_DIR/$TARGET_NAME"
 chmod +x "$BIN_DIR/$TARGET_NAME"
+
+# Installing modules
+print_status "Installing ETSCTF modules."
+mkdir -p $MODULES_DIR
+cd $MODULES_DIR
+git clone https://github.com/DystopianRescuer/etsctf-penelope-modules .
 
 print_status "Successfully installed penelope to $BIN_DIR/$TARGET_NAME"
 
