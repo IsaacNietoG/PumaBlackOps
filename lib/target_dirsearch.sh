@@ -3,7 +3,7 @@
 
 target_dirsearch() {
     local PORT=80
-    local WORDLIST="/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
+    local WORDLIST="${FFUF_WORDLIST:-/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt}"
     local OUTPUT_DIR OUTPUT_FILE TIMESTAMP
 
     if [ $# -ge 1 ]; then

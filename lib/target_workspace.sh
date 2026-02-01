@@ -8,12 +8,13 @@ target_create_workspace_structure() {
     local TARGET_NAME="$1"
     local TARGET_IP="$2"
     local BIN_DIR CTFLINPEAS_SRC CTFLINPEAS_DST
+    local SUBDOMAIN="${TARGET_SUBDOMAIN:-echocity-f.com}"
 
     WORKSPACE_DIR="$(pwd)/$TARGET_NAME"
     mkdir -p "$WORKSPACE_DIR"
 
     echo "export IP=$TARGET_IP" > "$WORKSPACE_DIR/.envrc"
-    echo "export URL=$TARGET_NAME.echocity-f.com" >> "$WORKSPACE_DIR/.envrc"
+    echo "export URL=$TARGET_NAME.$SUBDOMAIN" >> "$WORKSPACE_DIR/.envrc"
     echo "export CTF_WORKSPACE_DIR=$WORKSPACE_DIR" >> "$WORKSPACE_DIR/.envrc"
 
     direnv allow "$WORKSPACE_DIR"

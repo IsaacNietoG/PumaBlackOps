@@ -64,6 +64,7 @@ target_tmux_attach_or_create_session() {
     local SESSION_NAME="$1"
     local WORKSPACE_DIR="$2"
     local TARGET_IP="$3"
+    local SUBDOMAIN="${TARGET_SUBDOMAIN:-echocity-f.com}"
     local HOSTS_ENTRY
 
     if tmux -L "$SERVER_NAME" has-session -t "$SESSION_NAME" 2>/dev/null; then
@@ -81,7 +82,7 @@ target_tmux_attach_or_create_session() {
         tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m
         tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m
 
-        HOSTS_ENTRY="$TARGET_IP        $SESSION_NAME.echocity-f.com"
+        HOSTS_ENTRY="$TARGET_IP        $SESSION_NAME.$SUBDOMAIN"
         if ! grep -q "$HOSTS_ENTRY" /etc/hosts 2>/dev/null; then
             tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
         else

@@ -6,8 +6,20 @@
 SCRIPT_DIR="$(dirname "$(readlink -f -- "$0")")"
 REPO_BASE="$(dirname "$SCRIPT_DIR")"
 
-source "$REPO_BASE/lib/tmux_helpers.sh"
+# Colores y common primero (para mensajes de error al cargar config)
 source "$REPO_BASE/lib/target_common.sh"
+
+# Carga de configuración
+CONFIG_FILE="$REPO_BASE/conf/target.conf"
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=conf/target.conf
+    source "$CONFIG_FILE"
+else
+    echo -e "${RED}Error: Archivo de configuración no encontrado: $CONFIG_FILE${NC}"
+    exit 1
+fi
+
+source "$REPO_BASE/lib/tmux_helpers.sh"
 source "$REPO_BASE/lib/target_help.sh"
 source "$REPO_BASE/lib/target_tmux.sh"
 source "$REPO_BASE/lib/target_workspace.sh"

@@ -2,7 +2,7 @@
 # Depende: target_common.sh, tmux_helpers.sh (set_tmux_status_name). REPO_BASE.
 
 target_scan_ports() {
-    local PORT_OPTION="-p 21,22,80,1337,3000,5000,5005,5050,5173,6022,6667,8000,8013,8080,8081,8800,9999,10720,10750"
+    local PORT_OPTION="${NMAP_PORT_OPTION:--p-}"
     local SCAN_SERVICES=""
     local current_pane_id
     local PYTHON_SCRIPT OUTPUT_FILE

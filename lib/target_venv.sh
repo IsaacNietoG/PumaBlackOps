@@ -4,6 +4,8 @@
 target_venv() {
     local RESP
 
+    local SUBDOMAIN="${TARGET_SUBDOMAIN:-echocity-f.com}"
+
     if [ $# -ge 1 ]; then
         if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
             TARGET_NAME="$1"
