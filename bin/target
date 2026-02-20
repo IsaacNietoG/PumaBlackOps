@@ -1,607 +1,67 @@
 #!/bin/bash
+# Target - Herramienta de gestión de objetivos para pentesting.
+# Uso: target <subcomando> [opciones]
+# Refactorizado: lógica en lib/target_*.sh; este script solo dispatcher.
 
-# Get the base directory of the repo (assume this script is in bin/)
 SCRIPT_DIR="$(dirname "$(readlink -f -- "$0")")"
 REPO_BASE="$(dirname "$SCRIPT_DIR")"
+
+# Colores y common primero (para mensajes de error al cargar config)
+source "$REPO_BASE/lib/target_common.sh"
+
+# Carga de configuración
+CONFIG_FILE="$REPO_BASE/conf/target.conf"
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=conf/target.conf
+    source "$CONFIG_FILE"
+else
+    echo -e "${RED}Error: Archivo de configuración no encontrado: $CONFIG_FILE${NC}"
+    exit 1
+fi
+
 source "$REPO_BASE/lib/tmux_helpers.sh"
-# Target - Herramienta de gestión de objetivos para pentesting
-# Uso: target <subcomando> [opciones]
+source "$REPO_BASE/lib/target_help.sh"
+source "$REPO_BASE/lib/target_tmux.sh"
+source "$REPO_BASE/lib/target_workspace.sh"
+source "$REPO_BASE/lib/target_scan.sh"
+source "$REPO_BASE/lib/target_list.sh"
+source "$REPO_BASE/lib/target_note.sh"
+source "$REPO_BASE/lib/target_dirsearch.sh"
+source "$REPO_BASE/lib/target_venv.sh"
 
-# Colores para output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Función para mostrar ayuda
-show_help() {
-    echo -e "${BLUE}Target - Herramienta de gestión de objetivos${NC}"
-    echo ""
-    echo "Uso: target <subcomando> [opciones]"
-    echo "Protip: si estás bajo la carpeta de un target, el parámetro <nombre_máquina> no es necesario"
-    echo ""
-    echo "Subcomandos disponibles:"
-    echo "  add <nombre_maquina> <IP>     - Crear nuevo workspace para un objetivo"
-    echo "  scan                          - Ejecutar escaneos nmap (ver más abajo)"
-    echo "  list                          - Listar todos los objetivos"
-    echo "  info <nombre_maquina>         - Mostrar información del objetivo"
-    echo "  note <nombre_maquina> <nota>  - Agregar nota rápida al writeup"
-    echo "  dirsearch <nombre_maquina> <puerto> - Buscar directorios con ffuf (recursivo, usa SecLists)"
-    echo "  venv [nombre_maquina]          - Crear y configurar entorno virtual Python para el target (con activación automática en .envrc)"
-    echo "  help                          - Mostrar esta ayuda"
-    echo ""
-    echo "Subcomandos avanzados de escaneo (dentro del workspace):"
-    echo "  target scan ports [--top-ports N | --all-ports]   # Escaneo de puertos TCP (por defecto top 1000)"
-    echo "  target scan services                             # Escaneo de servicios/versión sobre puertos detectados"
-    echo "  target scan all [--top-ports N | --all-ports]    # Hace ambos pasos en orden"
-    echo ""
-    echo "Ejemplos de escaneo dentro del workspace del target:"
-    echo "  target scan ports --top-ports 1000"
-    echo "  target scan ports --all-ports"
-    echo "  target scan services"
-    echo "  target scan all --top-ports 5000"
-    echo ""
-    echo "Ejemplos:"
-    echo "  target add vulnbox 192.168.1.100"
-    echo "  target scan vulnbox"
-    echo "  target list"
-    echo "  target dirsearch vulnbox 8080"
-    echo "  target venv vulnbox"
-}
-
-# Función para crear nuevo workspace (target add)
-target_add() {
-    if [ $# -ne 2 ]; then
-        echo -e "${RED}Error: Uso: target add <nombre_maquina> <IP>${NC}"
-        exit 1
-    fi
-
-    TARGET_NAME=$1
-    TARGET_IP=$2
-
-    # Crear carpeta de trabajo
-    WORKSPACE_DIR="$(pwd)/$TARGET_NAME"
-    mkdir -p "$WORKSPACE_DIR"
-
-    # Crear archivo .envrc con la IP del target
-    echo "export IP=$TARGET_IP" > "$WORKSPACE_DIR/.envrc"
-    echo "export URL=$TARGET_NAME.echocity-f.com" >> "$WORKSPACE_DIR/.envrc"
-    echo "export CTF_WORKSPACE_DIR=$WORKSPACE_DIR" >> "$WORKSPACE_DIR/.envrc"
-
-    # Habilitar la ejecución del direnv
-    direnv allow "$WORKSPACE_DIR"
-
-    # Crear un archivo README.md para documentación rápida
-    cat <<EOL > "$WORKSPACE_DIR/writeup.md"
-# $TARGET_NAME
-
-- **IP**: $TARGET_IP
-- **Creado el**: $(date)
-- **Notas**: Escribe cualquier detalle relevante aquí.
-
-## Notas Iniciales
-
-## Reconocimiento
-
-## Explotación
-
-## Post-Explotación
-
-## Notas Finales
-EOL
-
-    # Crear directorios para distintas fases de pentesting
-    mkdir -p "$WORKSPACE_DIR/recon"   # Escaneos de Nmap
-    mkdir -p "$WORKSPACE_DIR/exploits"  # Posibles exploits o POCs
-    mkdir -p "$WORKSPACE_DIR/loot"  # Archivos obtenidos durante la explotación
-    mkdir -p "$WORKSPACE_DIR/research"  # Recursos importantes
-
-    # Copiar ctflinpeas al directorio del target
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    CTFLINPEAS_SRC="$SCRIPT_DIR/ctflinpeas"
-    CTFLINPEAS_DST="$WORKSPACE_DIR/ctflinpeas"
-    if [ -f "$CTFLINPEAS_SRC" ]; then
-        cp "$CTFLINPEAS_SRC" "$CTFLINPEAS_DST"
-        chmod +x "$CTFLINPEAS_DST"
-        echo -e "${GREEN}ctflinpeas copiado a $CTFLINPEAS_DST${NC}"
-    else
-        echo -e "${YELLOW}Advertencia: ctflinpeas no encontrado en $CTFLINPEAS_SRC. No se copió.${NC}"
-    fi
-
-    echo -e "${GREEN}Workspace para $TARGET_NAME creada en $WORKSPACE_DIR${NC}"
-
-   ### --- FEATURE TMUX --- ###
-   SESSION_NAME="$TARGET_NAME"
-   cd "$WORKSPACE_DIR/.."
-   
-   # Determine SERVER_NAME based on active tmux sessions
-   # Check if there are any non-target sessions (sessions not created by our tool)
-   EXISTING_SESSIONS=$(tmux list-sessions 2>/dev/null | cut -d: -f1 || echo "")
-   TARGET_SESSIONS_ONLY=true
-   
-   if [ -n "$EXISTING_SESSIONS" ]; then
-       # Check each session to see if they're all target sessions
-       while IFS= read -r session; do
-           if [ -n "$session" ]; then
-               # Check if this session exists in any of our target directories
-               SESSION_EXISTS_IN_TARGET=false
-               for target_dir in */; do
-                   if [ -d "$target_dir" ] && [ -f "$target_dir/.envrc" ]; then
-                       target_name=$(basename "$target_dir")
-                       if [ "$session" = "$target_name" ]; then
-                           SESSION_EXISTS_IN_TARGET=true
-                           break
-                       fi
-                   fi
-               done
-               
-               # If any session is not a target session, we need to use PumaBlackOps
-               if [ "$SESSION_EXISTS_IN_TARGET" = false ]; then
-                   TARGET_SESSIONS_ONLY=false
-                   break
-               fi
-           fi
-       done <<< "$EXISTING_SESSIONS"
-   fi
-   
-   if [ "$TARGET_SESSIONS_ONLY" = true ] && [ -n "$EXISTING_SESSIONS" ]; then
-       SERVER_NAME="default"
-       echo -e "${BLUE}Todas las sesiones existentes son targets creados por esta herramienta. Usando socket: $SERVER_NAME${NC}"
-   elif [ -n "$EXISTING_SESSIONS" ]; then
-       SERVER_NAME="PumaBlackOps"
-       echo -e "${BLUE}Se han encontrado sesiones de Tmux que, o no son relacionadas con targets, o la lógica de esta herramienta no está diseñada para manejarlas. Para evitar conflictos se ha establecido el nombre del socket en $SERVER_NAME${NC}"
-       echo -e "${YELLOW}Nota: Puedes buscar esta sesión usando: tmux -L $SERVER_NAME list-sessions${NC}"
-   else
-       SERVER_NAME="default"
-       echo -e "${BLUE}No se han encontrado otras sesiones de Tmux, se ha establecido el nombre del socket en $SERVER_NAME${NC}"
-   fi
-   
-   # Generate tmux config with hardcoded paths
-   echo -e "${BLUE}Generating tmux configuration...${NC}"
-   if [ -f "$REPO_BASE/lib/generate-tmux-config.sh" ]; then
-       bash "$REPO_BASE/lib/generate-tmux-config.sh"
-       TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
-       echo -e "${GREEN}Tmux configuration generated successfully!${NC}"
-   else
-       echo -e "${YELLOW}Warning: tmux config generator not found at $REPO_BASE/lib/generate-tmux-config.sh${NC}"
-       TMUX_CONFIG="$REPO_BASE/.config/tmux/tmux.conf"
-   fi
-
-   ## Verificamos si ya existe una sesión para este target
-   if tmux -L "$SERVER_NAME" has-session -t "$SESSION_NAME" 2>/dev/null; then
-	   echo -e "${YELLOW}Sesión de Tmux '$SESSION_NAME' ya existe. Adjuntando...${NC}"
-	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
-   else
-	   echo -e "${BLUE}Creando y adjuntando nueva sesión de Tmux '$SESSION_NAME' ...${NC}"
-	   
-	   # Primero creamos la sesión (-d: detached | -s: nombre de sesión | -c: directorio | -f: config file)
-	   tmux -L "$SERVER_NAME" -f "$TMUX_CONFIG" new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
-	   tmux -L "$SERVER_NAME" set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
-	   tmux -L "$SERVER_NAME" set-environment -t "$SESSION_NAME" TMUX_CONF "$TMUX_CONFIG"
-	   
-	   # Creamos las ventanas
-	   # 1) RECON
-	   tmux -L "$SERVER_NAME" split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"  # Divide la ventana en dos v-panes
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m 
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m 
-
-	   
-	   # Comando para agregar $IP $HOST al /etc/hosts
-	   HOSTS_ENTRY="$TARGET_IP        $TARGET_NAME.echocity-f.com"
-	   if ! grep -q "$HOSTS_ENTRY" /etc/hosts; then
-		   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
-	   else
-		   tmux -L "$SERVER_NAME" display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
-	   fi
-		
-           # Comando para lanzar target scan
-           tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "target scan ports -s " 
-           		 
-           # 2) Exploit
-	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "clear" C-m # Limpiar el panel de Aux
-	   # Enviamos comando de penelope para tenerlo listo
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "penelope -p 9000"
-
-	   # 3) Misc
-	   tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
-	   tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3" "clear" C-m
-	   (tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3.1" "$REPO_BASE/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m && clear C-m)&  
-	   
-	   # Nos unimos a la sesión en la primera ventana
-	   tmux -L "$SERVER_NAME" select-window -t "$SESSION_NAME:1"
-	   tmux -L "$SERVER_NAME" select-pane -U
-	   tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
-    fi
-}
-
-# Función para escanear puertos (target scan ports)
-target_scan_ports() {
-    # Uso: target scan ports [--top-ports N | --all-ports]
-    PORT_OPTION="-p 21,22,80,1337,3000,5000,5005,5050,5173,6022,6667,8000,8013,8080,8081,8800,9999,10720,10750"
-    local SCAN_SERVICES=""
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --top-ports)
-                shift
-                PORT_OPTION="--top-ports $1"
-                shift
-                ;;
-            --all-ports)
-                PORT_OPTION="-p-"
-                shift
-                ;;
-            -s|--services)
-            	shift
-            	SCAN_SERVICES=$1
-            	shift
-            	;;
-            *)
-                shift
-                ;;
-        esac
-    done
-    
-    ## -- Ejecución port scan browser -- ##
-    if [ -n "$SCAN_SERVICES" ]; then
-        local PYTHON_SCRIPT="$REPO_BASE/lib/port_scan_browser.py"
-        echo -e "${BLUE}Iniciando escaneo rápido con script externo para encontrar $SCAN_SERVICES servicios...${NC}"
-        
-        if [ -f "$PYTHON_SCRIPT" ]; then
-            # Pasa el número como argumento -t al script de Python
-            python3 "$PYTHON_SCRIPT" -s "$SCAN_SERVICES"
-        else
-            echo -e "${RED}Error: No se encontró el script en $PYTHON_SCRIPT${NC}"
-        fi
-        
-        # Salimos de la función para no ejecutar el nmap normal
-        return 0
-    fi
-
-    ## -- Integración Tmux -- ##
-    local current_pane_id
-    if [ -n "$TMUX" ]; then
-        current_pane_id=$(tmux display-message -p '#{pane_id}')
-    fi
-    
-    if [ -n "$current_pane_id" ]; then
-        set_tmux_status_name "$current_pane_id" "󰇑 Nmap Pts:$TARGET_NAME" "original_pane_title"
-    fi
-
-    OUTPUT_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
-    echo -e "${BLUE}Iniciando escaneo de puertos para $TARGET_NAME ($IP)${NC}"
-    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $IP --open $PORT_OPTION -oN $OUTPUT_FILE -sS${NC}"
-    nmap -Pn -n -T4 "$IP" --open $PORT_OPTION -oN "$OUTPUT_FILE" -sS
-    echo -e "${GREEN}Escaneo de puertos completado. Resultados en: $OUTPUT_FILE${NC}"
-
-    if [ -n "$current_pane_id" ]; then
-        set_tmux_status_name "$current_pane_id" "" "original_pane_title" # "" para restaurar el nombre original
-    fi
-
-}
-
-# Función para escanear servicios/versión (target scan services)
-target_scan_services() {
-    PORTS_FILE="$WORKSPACE_DIR/recon/port_scan.txt"
-    OUTPUT_FILE="$WORKSPACE_DIR/recon/versions_scan.txt"
-    if [ ! -f "$PORTS_FILE" ]; then
-        echo -e "${RED}Error: No se encontró $PORTS_FILE. Ejecuta primero 'target scan ports' o 'target scan all'.${NC}"
-        exit 1
-    fi
-    # Extraer puertos abiertos del archivo de escaneo de puertos
-    OPEN_PORTS=$(grep -oP '^[0-9]+/tcp\s+open' "$PORTS_FILE" | cut -d'/' -f1 | paste -sd, -)
-    if [ -z "$OPEN_PORTS" ]; then
-        echo -e "${YELLOW}No se detectaron puertos abiertos en $PORTS_FILE. No se realizará escaneo de servicios.${NC}"
-        exit 0
-    fi
-    echo -e "${BLUE}Iniciando escaneo de servicios/versión para $TARGET_NAME ($IP) en puertos: $OPEN_PORTS${NC}"
-    echo -e "${YELLOW}Comando: nmap -Pn -n -T4 $IP -sCV -oN $OUTPUT_FILE -p $OPEN_PORTS${NC}"
-    nmap -Pn -n -T4 "$IP" -sCV -oN "$OUTPUT_FILE" -p "$OPEN_PORTS"
-    echo -e "${GREEN}Escaneo de servicios completado. Resultados en: $OUTPUT_FILE${NC}"
-}
-
-# Función para escaneo combinado (target scan all)
-target_scan_all() {
-    # Pasar los mismos parámetros de puertos que a ports
-    target_scan_ports "$@"
-    target_scan_services
-}
-
-# Nueva función principal para target scan
-main_target_scan() {
-    if [ $# -eq 0 ]; then
-        echo -e "${BLUE}Uso de target scan:${NC}"
-        echo "  target scan ports [--top-ports N | --all-ports]   # Escaneo de puertos TCP (por defecto top 1000)"
-        echo "  target scan services                             # Escaneo de servicios/versión sobre puertos detectados"
-        echo "  target scan all [--top-ports N | --all-ports]    # Hace ambos pasos en orden"
-        exit 1
-    fi
-    MODE=$1
-    shift
-    # Determinar target y workspace
-    if [ -f ./.envrc ]; then
-        TARGET_NAME=$(basename "$PWD")
-        WORKSPACE_DIR="$PWD"
-    else
-        echo -e "${RED}Error: Ejecuta este comando dentro del workspace del target (donde está .envrc)${NC}"
-        exit 1
-    fi
-    if [ -f "$WORKSPACE_DIR/.envrc" ]; then
-        source "$WORKSPACE_DIR/.envrc"
-    else
-        echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
-        exit 1
-    fi
-    if [ -z "$IP" ]; then
-        echo -e "${RED}Error: Variable IP no definida en .envrc${NC}"
-        exit 1
-    fi
-    case "$MODE" in
-        ports)
-            target_scan_ports "$@"
-            ;;
-        services)
-            target_scan_services
-            ;;
-        all)
-            target_scan_all "$@"
-            ;;
-        *)
-            echo -e "${RED}Error: Modo de escaneo '$MODE' no reconocido${NC}"
-            echo "Modos válidos: ports, services, all"
-            exit 1
-            ;;
-    esac
-}
-
-# Función para listar objetivos
-target_list() {
-    echo -e "${BLUE}Objetivos disponibles:${NC}"
-    echo ""
-    
-    for dir in */; do
-        if [ -d "$dir" ] && [ -f "$dir/.envrc" ]; then
-            TARGET_NAME=$(basename "$dir")
-            source "$dir/.envrc"
-            echo -e "${GREEN}• $TARGET_NAME${NC} - $IP"
-        fi
-    done
-}
-
-# Función para mostrar información del objetivo
-target_info() {
-    if [ $# -eq 1 ]; then
-        TARGET_NAME=$1
-        WORKSPACE_DIR="./$TARGET_NAME"
-    elif [ $# -eq 0 ] && [ -f ./.envrc ]; then
-        TARGET_NAME=$(basename "$PWD")
-        WORKSPACE_DIR="$PWD"
-    else
-        echo -e "${RED}Error: Uso: target info <nombre_maquina> (o ejecuta dentro del workspace)${NC}"
-        exit 1
-    fi
-
-    if [ ! -d "$WORKSPACE_DIR" ]; then
-        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
-        exit 1
-    fi
-
-    echo -e "${BLUE}Información del objetivo: $TARGET_NAME${NC}"
-    echo ""
-    
-    if [ -f "$WORKSPACE_DIR/.envrc" ]; then
-        source "$WORKSPACE_DIR/.envrc"
-        echo -e "${GREEN}IP:${NC} $IP"
-    fi
-    
-    if [ -f "$WORKSPACE_DIR/writeup.md" ]; then
-        echo -e "${GREEN}Writeup:${NC} $WORKSPACE_DIR/writeup.md"
-    fi
-    
-    echo -e "${GREEN}Directorios:${NC}"
-    ls -la "$WORKSPACE_DIR" | grep "^d"
-}
-
-# Función para agregar una nota rápida al writeup
-target_note() {
-    if [ $# -ge 1 ]; then
-        # Si el primer argumento es un nombre de target (existe carpeta y .envrc)
-        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
-            TARGET_NAME=$1
-            WORKSPACE_DIR="./$TARGET_NAME"
-            shift
-        else
-            # Si no existe, asumimos que estamos en el workspace y el argumento es la nota
-            TARGET_NAME=$(basename "$PWD")
-            WORKSPACE_DIR="$PWD"
-        fi
-    elif [ -f ./.envrc ]; then
-        TARGET_NAME=$(basename "$PWD")
-        WORKSPACE_DIR="$PWD"
-    else
-        echo -e "${RED}Error: Uso: target note [nombre_maquina] <texto de la nota> (o ejecuta dentro del workspace)${NC}"
-        exit 1
-    fi
-
-    if [ ! -d "$WORKSPACE_DIR" ]; then
-        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
-        exit 1
-    fi
-
-    if [ $# -eq 0 ]; then
-        echo -e "${RED}Error: Debes ingresar el texto de la nota${NC}"
-        exit 1
-    fi
-
-    NOTE_TEXT="$*"
-    NOTE_DATE=$(date '+%Y-%m-%d %H:%M')
-    WRITEUP_FILE="$WORKSPACE_DIR/writeup.md"
-
-    echo -e "\n---\n**Nota rápida [$NOTE_DATE]:** $NOTE_TEXT" >> "$WRITEUP_FILE"
-    echo -e "${GREEN}Nota agregada a $WRITEUP_FILE${NC}"
-}
-
-# Función para realizar búsqueda de directorios con ffuf (target dirsearch)
-target_dirsearch() {
-    # Uso: target dirsearch [nombre_maquina] [puerto]
-    if [ $# -ge 1 ]; then
-        # Si el primer argumento es un nombre de target (existe carpeta y .envrc)
-        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
-            TARGET_NAME=$1
-            WORKSPACE_DIR="./$TARGET_NAME"
-            shift
-        else
-            # Si no existe, asumimos que estamos en el workspace y el argumento es el puerto
-            TARGET_NAME=$(basename "$PWD")
-            WORKSPACE_DIR="$PWD"
-        fi
-    elif [ -f ./.envrc ]; then
-        TARGET_NAME=$(basename "$PWD")
-        WORKSPACE_DIR="$PWD"
-    else
-        echo -e "${RED}Error: Uso: target dirsearch [nombre_maquina] [puerto] (o ejecuta dentro del workspace)${NC}"
-        exit 1
-    fi
-
-    if [ ! -d "$WORKSPACE_DIR" ]; then
-        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
-        exit 1
-    fi
-
-    # Cargar IP del target
-    if [ -f "$WORKSPACE_DIR/.envrc" ]; then
-        source "$WORKSPACE_DIR/.envrc"
-    else
-        echo -e "${RED}Error: Archivo .envrc no encontrado en $WORKSPACE_DIR${NC}"
-        exit 1
-    fi
-
-    if [ -z "$IP" ]; then
-        echo -e "${RED}Error: Variable IP no definida en .envrc${NC}"
-        exit 1
-    fi
-
-    # Puerto opcional
-    PORT=80
-    if [ $# -ge 1 ]; then
-        PORT=$1
-    fi
-
-    # Construir URL
-    if [ "$PORT" = "80" ]; then
-        URL="http://$IP/"
-    elif [ "$PORT" = "443" ]; then
-        URL="https://$IP/"
-    else
-        URL="http://$IP:$PORT/"
-    fi
-
-    # Diccionario por defecto
-    WORDLIST="/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
-    OUTPUT_DIR="$WORKSPACE_DIR/recon"
-    mkdir -p "$OUTPUT_DIR"
-    TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-    OUTPUT_FILE="$OUTPUT_DIR/ffuf_dirsearch_${PORT}_${TIMESTAMP}.txt"
-
-    echo -e "${BLUE}Iniciando búsqueda de directorios con ffuf para $TARGET_NAME ($URL)${NC}"
-    echo -e "${YELLOW}Comando: ffuf -u ${URL}FUZZ -w $WORDLIST -recursion -o $OUTPUT_FILE${NC}"
-    echo ""
-
-    ffuf -u "${URL}FUZZ" -w "$WORDLIST" -recursion -o "$OUTPUT_FILE" -of md
-
-    echo ""
-    echo -e "${GREEN}Búsqueda completada. Resultados guardados en: $OUTPUT_FILE${NC}"
-}
-
-# Función para crear y configurar entorno virtual Python (target venv)
-target_venv() {
-    # Uso: target venv [nombre_maquina]
-    if [ $# -ge 1 ]; then
-        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
-            TARGET_NAME=$1
-            WORKSPACE_DIR="./$TARGET_NAME"
-        else
-            echo -e "${RED}Error: Workspace '$1' no encontrado${NC}"
-            exit 1
-        fi
-    elif [ -f ./.envrc ]; then
-        TARGET_NAME=$(basename "$PWD")
-        WORKSPACE_DIR="$PWD"
-    else
-        echo -e "${RED}Error: Uso: target venv [nombre_maquina] (o ejecuta dentro del workspace)${NC}"
-        exit 1
-    fi
-
-    cd "$WORKSPACE_DIR"
-
-    # Crear entorno virtual si no existe
-    if [ ! -d "venv" ]; then
-        echo -e "${BLUE}Creando entorno virtual Python en $WORKSPACE_DIR/venv ...${NC}"
-        python3 -m venv venv
-        echo -e "${GREEN}Entorno virtual creado.${NC}"
-    else
-        echo -e "${YELLOW}El entorno virtual ya existe en $WORKSPACE_DIR/venv${NC}"
-    fi
-
-    # Agregar activación automática a .envrc si no existe
-    if ! grep -q 'source ./venv/bin/activate' .envrc; then
-        echo 'source ./venv/bin/activate' >> .envrc
-        echo -e "${GREEN}Línea de activación agregada a .envrc${NC}"
-    else
-        echo -e "${YELLOW}La activación automática ya está presente en .envrc${NC}"
-    fi
-
-    echo -e "${BLUE}Si tienes direnv instalado, el entorno virtual se activará automáticamente al entrar a este directorio.${NC}"
-    echo -e "${YELLOW}Si no usas direnv, puedes activar el entorno manualmente con: source venv/bin/activate${NC}"
-
-    # Opcional: instalar requirements.txt si existe
-    if [ -f "requirements.txt" ]; then
-        echo -e "${BLUE}Se detectó requirements.txt. ¿Deseas instalar dependencias ahora? (s/n)${NC}"
-        read -r RESP
-        if [[ "$RESP" =~ ^[sS]$ ]]; then
-            ./venv/bin/pip install -r requirements.txt
-        fi
-    fi
-
-    cd - > /dev/null
-}
-
-# Verificar que se proporcione al menos un argumento
 if [ $# -eq 0 ]; then
     show_help
     exit 1
 fi
 
-# Procesar subcomandos
 case "$1" in
-    "add")
+    add)
         target_add "$2" "$3"
         ;;
-    "scan")
+    scan)
         shift
         main_target_scan "$@"
         ;;
-    "list")
+    list)
         target_list
         ;;
-    "info")
+    info)
         shift
         target_info "$@"
         ;;
-    "note")
+    note)
         shift
         target_note "$@"
         ;;
-    "dirsearch")
+    dirsearch)
         shift
         target_dirsearch "$@"
         ;;
-    "venv")
+    venv)
         shift
         target_venv "$@"
         ;;
-    "help"|"-h"|"--help")
+    help|-h|--help)
         show_help
         ;;
     *)
@@ -610,4 +70,4 @@ case "$1" in
         show_help
         exit 1
         ;;
-esac 
+esac
