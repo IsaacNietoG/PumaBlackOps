@@ -4,3 +4,12 @@
 
 ## target-scan
 - Buscar forma de ejecutar ports sin root
+
+## assaultRepository
+- Safeguards en el mecanismo de detención del servidor. Pienso en el siguiente caso borde:
+
+  - Ejecutamos el assaultrepo. Se le asigna el PID:=k
+  - Se apaga la computadora
+  - Se reinicia la computadora. Un proceso cualquiera empieza, con PID:=k
+  - Invocamos la detención del servidor. La lógica del programa elimina el proceso con PID=k
+  - Ya que el proceso con PID:=k es un proceso cualquiera, este no es el comportamiento esperado

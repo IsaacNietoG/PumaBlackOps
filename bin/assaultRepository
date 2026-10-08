@@ -14,6 +14,18 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Carga de configuración
+CONFIG_FILE="$REPO_BASE/conf/assaultRepository.conf"
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=conf/assaultRepository.conf
+    source "$CONFIG_FILE"
+else
+    echo -e "${RED}Error: Archivo de configuración no encontrado: $CONFIG_FILE${NC}"
+    exit 1
+fi
+
+repo_dir="${REPO_LOCATION:-$REPO_BASE/assaultrepository}"
+
 # Function to show help
 show_help() {
     echo -e "${BLUE}AssaultRepository - Servidor HTTP para Herramientas de Pentesting${NC}"
@@ -38,7 +50,6 @@ show_help() {
 # Function to start HTTP server
 start_server() {
     local port=${1:-8000}
-    local repo_dir="$REPO_BASE/assaultrepository"
     local pid_file="$REPO_BASE/.assaultrepository.pid"
     
     # Check if server is already running
@@ -106,7 +117,6 @@ stop_server() {
 # Function to show server status
 show_status() {
     local pid_file="$REPO_BASE/.assaultrepository.pid"
-    local repo_dir="$REPO_BASE/assaultrepository"
     
     echo -e "${BLUE}=== Estado de AssaultRepository ===${NC}"
     echo ""
@@ -170,7 +180,6 @@ add_tool() {
     
     local tool_name=$1
     local file_path=$2
-    local repo_dir="$REPO_BASE/assaultrepository"
     
     # Create repository directory if it doesn't exist
     mkdir -p "$repo_dir"
@@ -189,7 +198,6 @@ add_tool() {
 
 # Function to list tools
 list_tools() {
-    local repo_dir="$REPO_BASE/assaultrepository"
     
     if [ ! -d "$repo_dir" ]; then
         echo -e "${YELLOW}El directorio del repositorio aún no existe${NC}"
