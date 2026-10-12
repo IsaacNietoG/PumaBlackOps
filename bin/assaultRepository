@@ -26,6 +26,112 @@ fi
 
 repo_dir="${REPO_LOCATION:-$REPO_BASE/assaultrepository}"
 
+# Estado del servidor (persistido entre invocaciones)
+PID_FILE="$REPO_BASE/.assaultrepository.pid"
+LOG_FILE="$REPO_BASE/.assaultrepository.log"
+
+# Tiempos de espera (segundos) al arrancar y al detener
+STARTUP_WAIT_TRIES=15
+STARTUP_WAIT_INTERVAL=0.2
+STOP_WAIT_TRIES=25
+STOP_WAIT_INTERVAL=0.2
+
+# Boot ID actual. Cambia en cada reinicio, por lo que junto con START_TICKS
+# permite detectar que un PID fue reciclado por otro proceso.
+current_boot_id() {
+    cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo "unknown"
+}
+
+# Tick de arranque del proceso (campo 22 de /proc/<pid>/stat). Es único por
+# proceso y no se recicla mientras el PID no se reutilice.
+proc_start_ticks() {
+    local pid="$1" stat_line rest
+    [ -r "/proc/$pid/stat" ] || return 1
+    stat_line=$(cat "/proc/$pid/stat" 2>/dev/null) || return 1
+    # El campo comm puede contener espacios y paréntesis: se corta por el
+    # último ')' y se toma el campo 20 a partir de ahí (state es el campo 3).
+    rest=${stat_line#*') '}
+    [ "$rest" != "$stat_line" ] || return 1
+    # shellcheck disable=SC2086
+    set -- $rest
+    [ -n "${20:-}" ] || return 1
+    printf '%s' "${20}"
+}
+
+# Lee los metadatos guardados en el archivo PID.
+# Establece PID_META_PID, PID_META_BOOT, PID_META_TICKS, PID_META_PORT, PID_META_DIR.
+# Retorna 0 si el archivo tiene el formato actual, 1 si es antiguo o inválido.
+read_pid_meta() {
+    PID_META_PID="" PID_META_BOOT="" PID_META_TICKS="" PID_META_PORT="" PID_META_DIR=""
+    local key value
+    while IFS='=' read -r key value; do
+        case "$key" in
+            PID)        PID_META_PID="$value" ;;
+            BOOT_ID)    PID_META_BOOT="$value" ;;
+            START_TICKS) PID_META_TICKS="$value" ;;
+            PORT)       PID_META_PORT="$value" ;;
+            REPO_DIR)   PID_META_DIR="$value" ;;
+        esac
+    done < "$PID_FILE"
+    [ -n "$PID_META_PID" ]
+}
+
+# PID registrado en el archivo, sea del formato actual o del antiguo (solo número).
+read_pidfile_pid() {
+    if read_pid_meta; then
+        printf '%s' "$PID_META_PID"
+    else
+        head -n1 "$PID_FILE" 2>/dev/null | tr -dc '0-9'
+    fi
+}
+
+# Verifica si el proceso indicado es realmente el servidor que iniciamos.
+# Retorna: 0 = es nuestro servidor | 1 = el PID está vivo pero NO es nuestro
+#          2 = el PID no está en ejecución | 3 = no hay identidad verificable
+server_process_is_ours() {
+    local pid="$1" live_boot live_ticks
+
+    [ -n "$pid" ] || return 2
+    kill -0 "$pid" 2>/dev/null || return 2
+
+    read_pid_meta || return 3
+
+    live_boot=$(current_boot_id)
+    live_ticks=$(proc_start_ticks "$pid") || return 1
+
+    if [ "$PID_META_BOOT" = "$live_boot" ] && [ "$PID_META_TICKS" = "$live_ticks" ]; then
+        return 0
+    fi
+    return 1
+}
+
+# Último recurso para archivos PID en formato antiguo: al menos confirmar que
+# el proceso es un servidor HTTP antes de enviarle una señal.
+pid_looks_like_http_server() {
+    local pid="$1"
+    [ -n "$pid" ] || return 1
+    tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q 'http\.server'
+}
+
+write_pid_meta() {
+    local pid="$1" port="$2"
+    {
+        echo "PID=$pid"
+        echo "BOOT_ID=$(current_boot_id)"
+        echo "START_TICKS=$(proc_start_ticks "$pid")"
+        echo "PORT=$port"
+        echo "REPO_DIR=$repo_dir"
+    } > "$PID_FILE"
+}
+
+# Muestra el log del servidor para diagnosticar fallos de arranque.
+show_log_tail() {
+    if [ -s "$LOG_FILE" ]; then
+        echo -e "${YELLOW}Últimas líneas de $LOG_FILE:${NC}"
+        tail -n 5 "$LOG_FILE" | sed 's/^/    /'
+    fi
+}
+
 # Function to show help
 show_help() {
     echo -e "${BLUE}AssaultRepository - Servidor HTTP para Herramientas de Pentesting${NC}"
@@ -50,34 +156,58 @@ show_help() {
 # Function to start HTTP server
 start_server() {
     local port=${1:-8000}
-    local pid_file="$REPO_BASE/.assaultrepository.pid"
     
-    # Check if server is already running
-    if [ -f "$pid_file" ]; then
-        local pid=$(cat "$pid_file")
-        if kill -0 "$pid" 2>/dev/null; then
+    # Check if server is already running (verifying it is actually OUR server)
+    if [ -f "$PID_FILE" ]; then
+        local pid rc
+        pid=$(read_pidfile_pid)
+        server_process_is_ours "$pid"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
             echo -e "${YELLOW}El servidor ya está ejecutándose en PID $pid${NC}"
             return
         else
-            # PID file exists but process is dead, clean it up
-            rm -f "$pid_file"
+            # PID file exists but the process is dead, recycled, or unverifiable: clean it up
+            rm -f "$PID_FILE"
         fi
     fi
     
     # Create repository directory if it doesn't exist
-    mkdir -p "$repo_dir"
+    mkdir -p "$repo_dir" || {
+        echo -e "${RED}Error: No se pudo crear el directorio $repo_dir${NC}"
+        return 1
+    }
     
     echo -e "${GREEN}Iniciando servidor HTTP en puerto $port...${NC}"
     echo -e "${YELLOW}Directorio del repositorio: $repo_dir${NC}"
     echo -e "${YELLOW}Accede a tus herramientas en: http://0.0.0.0:$port${NC}"
     
-    # Start Python HTTP server in background and save PID
-    cd "$repo_dir"
-    python3 -m http.server "$port" >/dev/null 2>&1 &
+    # Start Python HTTP server in background, capturing errors to a log
+    : > "$LOG_FILE"
+    cd "$repo_dir" || {
+        echo -e "${RED}Error: No se pudo acceder a $repo_dir${NC}"
+        return 1
+    }
+    python3 -m http.server "$port" >>"$LOG_FILE" 2>&1 &
     local server_pid=$!
+
+    # Verify the server actually came up before declaring success. A port clash
+    # (or any other startup error) makes the process exit immediately.
+    local i
+    for (( i=0; i<STARTUP_WAIT_TRIES; i++ )); do
+        sleep "$STARTUP_WAIT_INTERVAL"
+        kill -0 "$server_pid" 2>/dev/null || break
+    done
+
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        echo -e "${RED}Error: El servidor no pudo iniciarse en el puerto $port.${NC}"
+        show_log_tail
+        rm -f "$PID_FILE"
+        return 1
+    fi
     
-    # Save PID to file
-    echo "$server_pid" > "$pid_file"
+    # Save verifiable PID metadata to file
+    write_pid_meta "$server_pid" "$port"
     
     echo -e "${GREEN}Servidor iniciado exitosamente con PID $server_pid${NC}"
     echo -e "${YELLOW}Usa 'assaultRepository stop' para detener el servidor${NC}"
@@ -85,44 +215,94 @@ start_server() {
 
 # Function to stop server
 stop_server() {
-    local pid_file="$REPO_BASE/.assaultrepository.pid"
+    local pid rc
     
-    if [ ! -f "$pid_file" ]; then
+    if [ ! -f "$PID_FILE" ]; then
         echo -e "${YELLOW}No se encontró archivo PID del servidor. El servidor puede no estar ejecutándose.${NC}"
         return
     fi
     
-    local pid=$(cat "$pid_file")
-    
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo -e "${YELLOW}El proceso del servidor (PID $pid) no está ejecutándose. Limpiando archivo PID.${NC}"
-        rm -f "$pid_file"
+    pid=$(read_pidfile_pid)
+    if [ -z "$pid" ]; then
+        echo -e "${RED}El archivo PID está vacío o es inválido. Retirándolo sin tocar ningún proceso.${NC}"
+        rm -f "$PID_FILE"
         return
+    fi
+
+    # NEVER signal a PID without proving it is still our server. A bare PID can
+    # have been recycled by an unrelated process (notably after a reboot).
+    server_process_is_ours "$pid"
+    rc=$?
+
+    if [ "$rc" -eq 2 ]; then
+        echo -e "${YELLOW}El proceso del servidor (PID $pid) no está ejecutándose. Limpiando archivo PID.${NC}"
+        rm -f "$PID_FILE"
+        return
+    fi
+
+    if [ "$rc" -eq 1 ]; then
+        echo -e "${RED}El PID $pid está en uso, pero NO corresponde al servidor de assaultRepository.${NC}"
+        echo -e "${RED}Boot ID o ticks de arranque distintos: el PID fue reciclado. No se enviará 'kill'.${NC}"
+        echo -e "${YELLOW}Retirando el archivo PID obsoleto. Si el servidor sigue activo, deténgalo manualmente.${NC}"
+        rm -f "$PID_FILE"
+        return 1
+    fi
+
+    if [ "$rc" -eq 3 ]; then
+        # Archivo PID en formato antiguo (solo el número). No hay identidad
+        # verificable, así que exigimos al menos que sea un servidor HTTP.
+        if ! pid_looks_like_http_server "$pid"; then
+            echo -e "${RED}El PID $pid no corresponde al servidor de assaultRepository.${NC}"
+            echo -e "${RED}El archivo PID no tiene metadatos de identidad y el proceso no es un servidor HTTP.${NC}"
+            echo -e "${YELLOW}No se enviará 'kill' para no terminar un proceso ajeno. Retirando archivo PID.${NC}"
+            rm -f "$PID_FILE"
+            return 1
+        fi
+        echo -e "${YELLOW}Aviso: archivo PID en formato antiguo; identidad verificada solo por tipo de proceso.${NC}"
     fi
     
     echo -e "${GREEN}Deteniendo servidor (PID $pid)...${NC}"
-    kill "$pid"
-    
-    # Wait a moment and check if process was killed
-    sleep 1
+    kill "$pid" 2>/dev/null
+
+    # Wait for a graceful shutdown before escalating
+    local i
+    for (( i=0; i<STOP_WAIT_TRIES; i++ )); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep "$STOP_WAIT_INTERVAL"
+    done
+
     if kill -0 "$pid" 2>/dev/null; then
+        # Re-verify identity right before escalating: the PID must still be the
+        # same process we validated above, not a recycled one.
+        server_process_is_ours "$pid"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}El PID $pid dejó de corresponder al servidor. No se enviará 'kill -9'.${NC}"
+            rm -f "$PID_FILE"
+            return 1
+        fi
         echo -e "${RED}Falló al detener el servidor de forma elegante. Forzando terminación...${NC}"
-        kill -9 "$pid"
+        kill -9 "$pid" 2>/dev/null
+        sleep 0.5
+        if kill -0 "$pid" 2>/dev/null; then
+            echo -e "${RED}No se pudo detener el proceso $pid.${NC}"
+            rm -f "$PID_FILE"
+            return 1
+        fi
     fi
     
-    rm -f "$pid_file"
+    rm -f "$PID_FILE"
     echo -e "${GREEN}Servidor detenido exitosamente${NC}"
 }
 
 # Function to show server status
 show_status() {
-    local pid_file="$REPO_BASE/.assaultrepository.pid"
+    local pid rc
     
     echo -e "${BLUE}=== Estado de AssaultRepository ===${NC}"
     echo ""
     
     # Check if PID file exists
-    if [ ! -f "$pid_file" ]; then
+    if [ ! -f "$PID_FILE" ]; then
         echo -e "${RED}Estado: El servidor no está ejecutándose${NC}"
         echo ""
         echo -e "${YELLOW}Directorio del repositorio: $repo_dir${NC}"
@@ -134,15 +314,18 @@ show_status() {
         return
     fi
     
-    local pid=$(cat "$pid_file")
+    pid=$(read_pidfile_pid)
+    server_process_is_ours "$pid"
+    rc=$?
     
-    # Check if process is running
-    if kill -0 "$pid" 2>/dev/null; then
+    # Check if process is running AND is actually our server
+    if [ "$rc" -eq 0 ]; then
         echo -e "${GREEN}Estado: El servidor está ejecutándose${NC}"
         echo -e "${GREEN}PID: $pid${NC}"
         
         # Try to get port information
         local port=$(netstat -tlnp 2>/dev/null | grep "$pid" | awk '{print $4}' | cut -d: -f2 | head -1)
+        [ -z "$port" ] && port="$PID_META_PORT"
         if [ -n "$port" ]; then
             echo -e "${GREEN}Puerto: $port${NC}"
             echo -e "${YELLOW}URL: http://0.0.0.0:$port${NC}"
@@ -153,11 +336,19 @@ show_status() {
         if [ -n "$process_info" ]; then
             echo -e "${YELLOW}Proceso: $process_info${NC}"
         fi
-    else
+    elif [ "$rc" -eq 2 ]; then
         echo -e "${RED}Estado: Existe archivo PID del servidor pero el proceso no está ejecutándose${NC}"
         echo -e "${YELLOW}PID: $pid (proceso muerto)${NC}"
         echo -e "${YELLOW}Limpiando archivo PID obsoleto...${NC}"
-        rm -f "$pid_file"
+        rm -f "$PID_FILE"
+    else
+        echo -e "${RED}Estado: El PID registrado ($pid) NO corresponde al servidor${NC}"
+        echo -e "${YELLOW}El PID fue reciclado por otro proceso o el archivo PID es antiguo.${NC}"
+        echo -e "${YELLOW}No se enviará ninguna señal a ese proceso.${NC}"
+        if [ "$rc" -eq 1 ]; then
+            echo -e "${YELLOW}Limpiando archivo PID obsoleto...${NC}"
+            rm -f "$PID_FILE"
+        fi
     fi
     
     echo ""

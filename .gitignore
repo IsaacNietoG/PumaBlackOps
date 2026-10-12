@@ -2,3 +2,4 @@ bin/ctflinpeas
 bin/penelope
 .config/tmux/tmux.conf
 assaultrepository/*
+.assaultrepository.*
