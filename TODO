@@ -1,15 +1,40 @@
 # Lista de features para implementar
-## target-dirsearch
-- dirsearch usando dirsearch si existe, ffuf como fallback
 
-## target-scan
-- Buscar forma de ejecutar ports sin root
+## Bugs urgentes
+- scan: target_scan_services lee recon/port_scan.txt, pero port_scan_browser.py escribe
+  recon/port_scan_<IP>.txt. `target scan services` falla tras `scan ports -s N`.
+  - Unificar el nombre de salida en un solo lugar (helper o variable compartida)
+- venv: target_venv agrega `source ./venv/bin/activate` a .envrc pero no corre
+  `direnv allow`. direnv bloquea el archivo y la activación deja de funcionar.
+  - Correr `direnv allow` después de editar .envrc
+- note/dirsearch: si $1 no es un workspace válido el else no hace shift.
+  - `target note mytypo fix x` escribe "mytypo fix x" dentro del writeup
+  - target_note no verifica que exista writeup.md, puede crear uno espurio
+  - Validar $1 antes de consumirlo como contenido (o exigir `--`)
+- aliases: sourcear all.sh crea un bucle de sourceo que rompe la terminal.
+  - Teoría: Se está sourceando a sí mismo, por el mecanismo de sourcear todos los .sh dentro de la carpeta
 
-## assaultRepository
-- Safeguards en el mecanismo de detención del servidor. Pienso en el siguiente caso borde:
+## Bugs menores
+- conf/assaultRepository.conf está en git con REPO_LOCATION=/home/eviltaichi/weaponry
+  - Sacarlo de git, dejar un conf/assaultRepository.conf.example
+  - Análogo para todas las confs necesarias. No trackear directamente los archivos, trackear un .example
+- target list / target info: hacen source de cada .envrc sin sandbox y sin validar cwd
+- port_scan_browser.py usa Path.cwd()/recon en vez del WORKSPACE_DIR resuelto
+- assaultRepository start sirve en 0.0.0.0 sin auth (expone todo ~/weaponry en la red)
+  - Considerar --bind y que el 0.0.0.0 sea opt-in
 
-  - Ejecutamos el assaultrepo. Se le asigna el PID:=k
-  - Se apaga la computadora
-  - Se reinicia la computadora. Un proceso cualquiera empieza, con PID:=k
-  - Invocamos la detención del servidor. La lógica del programa elimina el proceso con PID=k
-  - Ya que el proceso con PID:=k es un proceso cualquiera, este no es el comportamiento esperado
+## Features
+- target-dirsearch
+  - Usar dirsearch si existe, ffuf como fallback
+- target-scan
+  - Buscar forma de ejecutar puertos sin root
+- aliases
+  - Agregar aliases que ya uso en mi .profile personal
+  - Aliases para target (t?)
+- modulo para OhMyZSH, first and foremost que funcione como alternativa a aliases
+  - Pero que además, proporcione una barra del current target en la consola
+
+## Hecho
+- assaultRepository: safeguards de detención del servidor
+  - El PID file guarda boot_id + start_ticks; se verifica identidad antes de kill
+  - start falla si el puerto está ocupado (antes reportaba éxito falso)
