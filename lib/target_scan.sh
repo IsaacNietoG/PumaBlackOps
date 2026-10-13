@@ -3,9 +3,8 @@
 
 target_scan_ports() {
     local PORT_OPTION="${NMAP_PORT_OPTION:--p-}"
-    local SCAN_SERVICES=""
     local current_pane_id
-    local PYTHON_SCRIPT OUTPUT_FILE
+    local OUTPUT_FILE
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -19,26 +18,15 @@ target_scan_ports() {
                 shift
                 ;;
             -s|--services)
-                shift
-                SCAN_SERVICES=$1
-                shift
+                echo -e "${RED}Error: la opción '-s/--services' fue eliminada.${NC}"
+                echo -e "${YELLOW}Usa 'target scan ports' y después 'target scan services'.${NC}"
+                return 1
                 ;;
             *)
                 shift
                 ;;
         esac
     done
-
-    if [ -n "$SCAN_SERVICES" ]; then
-        PYTHON_SCRIPT="$REPO_BASE/lib/port_scan_browser.py"
-        echo -e "${BLUE}Iniciando escaneo rápido con script externo para encontrar $SCAN_SERVICES servicios...${NC}"
-        if [ -f "$PYTHON_SCRIPT" ]; then
-            python3 "$PYTHON_SCRIPT" -s "$SCAN_SERVICES"
-        else
-            echo -e "${RED}Error: No se encontró el script en $PYTHON_SCRIPT${NC}"
-        fi
-        return 0
-    fi
 
     if [ -n "${TMUX:-}" ]; then
         current_pane_id=$(tmux display-message -p '#{pane_id}')
