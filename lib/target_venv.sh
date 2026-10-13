@@ -23,7 +23,12 @@ target_venv() {
 
     if [ ! -d "venv" ]; then
         echo -e "${BLUE}Creando entorno virtual Python en $WORKSPACE_DIR/venv ...${NC}"
-        python3 -m venv venv
+        if ! python3 -m venv venv; then
+            echo -e "${RED}Error: no se pudo crear el entorno virtual.${NC}"
+            echo -e "${YELLOW}En Debian/Ubuntu suele faltar el paquete: sudo apt install python3-venv${NC}"
+            cd - > /dev/null || true
+            return 1
+        fi
         echo -e "${GREEN}Entorno virtual creado.${NC}"
     else
         echo -e "${YELLOW}El entorno virtual ya existe en $WORKSPACE_DIR/venv${NC}"
@@ -34,6 +39,16 @@ target_venv() {
         echo -e "${GREEN}Línea de activación agregada a .envrc${NC}"
     else
         echo -e "${YELLOW}La activación automática ya está presente en .envrc${NC}"
+    fi
+
+    # Editar .envrc invalida el sello de confianza de direnv: si no se vuelve a
+    # autorizar, direnv bloquea el archivo y el venv deja de activarse al entrar.
+    # Se hace siempre, no solo cuando se modificó, para poder reparar un .envrc
+    # que ya quedó bloqueado en una ejecución anterior.
+    if command -v direnv > /dev/null 2>&1; then
+        direnv allow . && echo -e "${GREEN}.envrc autorizado por direnv.${NC}"
+    else
+        echo -e "${YELLOW}direnv no está instalado: ejecuta 'direnv allow' manualmente en el workspace.${NC}"
     fi
 
     echo -e "${BLUE}Si tienes direnv instalado, el entorno virtual se activará automáticamente al entrar a este directorio.${NC}"

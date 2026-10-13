@@ -1,9 +1,6 @@
 # Lista de features para implementar
 
 ## Bugs urgentes
-- venv: target_venv agrega `source ./venv/bin/activate` a .envrc pero no corre
-  `direnv allow`. direnv bloquea el archivo y la activación deja de funcionar.
-  - Correr `direnv allow` después de editar .envrc
 - note/dirsearch: si $1 no es un workspace válido el else no hace shift.
   - `target note mytypo fix x` escribe "mytypo fix x" dentro del writeup
   - target_note no verifica que exista writeup.md, puede crear uno espurio
@@ -48,3 +45,8 @@
     así que el glob caía sobre el cwd del usuario y sourceaba .sh ajenos al directorio
   - Ahora resuelve su propia ruta en bash y zsh, compara rutas absolutas y limpia variables
   - Verificado con .zshrc real: la terminal arranca y ya no ejecuta .sh del HOME
+- venv: direnv ya no bloquea el .envrc tras `target venv`
+  - Editar .envrc invalida el sello de direnv, así que ahora se corre `direnv allow`
+    siempre (también repara un .envrc bloqueado en una corrida anterior)
+  - De paso: si `python3 -m venv` falla, se aborta con exit 1 en vez de
+    announcear éxito y enganchar el activate a un venv inexistente
