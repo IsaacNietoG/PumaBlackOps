@@ -1,10 +1,7 @@
 # Lista de features para implementar
 
 ## Bugs urgentes
-- note/dirsearch: si $1 no es un workspace válido el else no hace shift.
-  - `target note mytypo fix x` escribe "mytypo fix x" dentro del writeup
-  - target_note no verifica que exista writeup.md, puede crear uno espurio
-  - Validar $1 antes de consumirlo como contenido (o exigir `--`)
+(ninguno)
 
 ## Bugs menores
 - conf/assaultRepository.conf está en git con REPO_LOCATION=/home/eviltaichi/weaponry
@@ -21,7 +18,7 @@
 - target-scan
   - Buscar forma de ejecutar puertos sin root
 - aliases
-  - Agregar aliases que ya uso en mi .profile personal
+  - [x] Agregar los aliases que ya usaba en mi .profile: ars, arst, arl, nscan, nsv, copy
   - Aliases para target (t?)
 - modulo para OhMyZSH, first and foremost que funcione como alternativa a aliases
   - Pero que además, proporcione una barra del current target en la consola
@@ -50,3 +47,9 @@
     siempre (también repara un .envrc bloqueado en una corrida anterior)
   - De paso: si `python3 -m venv` falla, se aborta con exit 1 en vez de
     announcear éxito y enganchar el activate a un venv inexistente
+- note/dirsearch: corregido el consumo de argumentos
+  - $1 solo se consume como target si es un workspace válido; si no, ya no se hace
+    shift y sus argumentos se toman como contenido. Un nombre mal escrito antes se
+    colaba dentro de la nota y, fuera de un workspace, creaba un writeup.md espurio
+  - target_note ahora exige que exista writeup.md antes de escribir
+  - target_dirsearch valida que el puerto sea numérico y esté en rango 1-65535
