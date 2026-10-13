@@ -8,11 +8,6 @@
   - `target note mytypo fix x` escribe "mytypo fix x" dentro del writeup
   - target_note no verifica que exista writeup.md, puede crear uno espurio
   - Validar $1 antes de consumirlo como contenido (o exigir `--`)
-- aliases: sourcear all.sh crea un bucle de sourceo que rompe la terminal.
-  - Causa: aliases/all.sh compara contra $BASH_SOURCE, que no existe en zsh (shell por defecto).
-    En zsh queda vacío, el auto-skip nunca aplica y el script se sourcea a sí mismo.
-  - Verificado: "job table full or recursion limit exceeded" al sourcear
-  - Corregir usando una forma compatible con zsh y bash, o comparar por basename
 
 ## Bugs menores
 - conf/assaultRepository.conf está en git con REPO_LOCATION=/home/eviltaichi/weaponry
@@ -48,3 +43,8 @@
     target_scan_services leía recon/port_scan.txt
   - Ahora -s/--services devuelve un error que indica el reemplazo
   - La sesión de tmux precarga `target scan ports` en vez de la opción retirada
+- aliases/all.sh: corregido el bucle de sourceo en zsh
+  - Causa: comparaba contra $BASH_SOURCE, vacío en zsh; además `dirname ""` da "."
+    así que el glob caía sobre el cwd del usuario y sourceaba .sh ajenos al directorio
+  - Ahora resuelve su propia ruta en bash y zsh, compara rutas absolutas y limpia variables
+  - Verificado con .zshrc real: la terminal arranca y ya no ejecuta .sh del HOME
