@@ -6,29 +6,31 @@ target_dirsearch() {
     local WORDLIST="${FFUF_WORDLIST:-/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt}"
     local OUTPUT_DIR OUTPUT_FILE TIMESTAMP
 
-    if [ $# -ge 1 ]; then
-        if [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
-            TARGET_NAME="$1"
-            WORKSPACE_DIR="./$1"
-            shift
-        else
-            TARGET_NAME=$(basename "$PWD")
-            WORKSPACE_DIR="$PWD"
-        fi
-    elif ! target_resolve_workspace_from_cwd; then
-        echo -e "${RED}Error: Uso: target dirsearch [nombre_maquina] [puerto] (o ejecuta dentro del workspace)${NC}"
+    # $1 solo se consume como nombre de target si es un workspace válido.
+    # Si no lo es, NO se hace shift y el argumento se interpreta como puerto.
+    if [ $# -ge 1 ] && [ -d "./$1" ] && [ -f "./$1/.envrc" ]; then
+        TARGET_NAME="$1"
+        WORKSPACE_DIR="./$1"
+        shift
+    elif target_resolve_workspace_from_cwd; then
+        :
+    else
+        echo -e "${RED}Error: Workspace '$1' no encontrado y no estás dentro de un workspace.${NC}"
+        echo "Uso: target dirsearch [nombre_maquina] [puerto]"
         exit 1
     fi
 
-    if [ ! -d "$WORKSPACE_DIR" ]; then
-        echo -e "${RED}Error: Workspace '$TARGET_NAME' no encontrado${NC}"
-        exit 1
-    fi
     if ! target_load_env --require-ip; then
         exit 1
     fi
 
-    [ $# -ge 1 ] && PORT=$1
+    if [ $# -ge 1 ]; then
+        PORT=$1
+        if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+            echo -e "${RED}Error: puerto inválido: '$PORT'${NC}"
+            exit 1
+        fi
+    fi
 
     if [ "$PORT" = "80" ]; then
         URL="http://$IP/"
