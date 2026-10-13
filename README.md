@@ -60,7 +60,6 @@ assaultRepository start
 ├── lib/
 │   ├── tmux_helpers.sh
 │   ├── generate-tmux-config.sh
-│   ├── port_scan_browser.py
 │   └── tmux-config.template
 ├── spells/
 │   ├── add-bin-to-path.sh
@@ -106,7 +105,6 @@ Scripts auxiliares para funcionalidades:
 
 - **tmux_helpers.sh**: Funciones Bash para manipular títulos de paneles/ventanas y obtener información de tmux, usadas por el script `target` para integración avanzada.
 - **generate-tmux-config.sh**: **NUEVO** - Script para generar configuraciones de tmux dinámicamente. Es utilizado por `target` para invocar las sesiones de tmux
-- **port_scan_browser.py**: **NUEVO** - Script Python para navegar por resultados de escaneo de puertos. Es utilizado por `target` para el comando target scan ports -s
 - **tmux-config.template**: **NUEVO** - Plantilla para configuraciones de tmux.
 
 ### `spells/`

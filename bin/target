@@ -22,6 +22,7 @@ fi
 source "$REPO_BASE/lib/tmux_helpers.sh"
 source "$REPO_BASE/lib/target_help.sh"
 source "$REPO_BASE/lib/target_tmux.sh"
+source "$REPO_BASE/lib/target_tmux_layout.sh"
 source "$REPO_BASE/lib/target_workspace.sh"
 source "$REPO_BASE/lib/target_scan.sh"
 source "$REPO_BASE/lib/target_list.sh"

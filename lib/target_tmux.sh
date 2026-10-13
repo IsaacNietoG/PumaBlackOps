@@ -64,8 +64,6 @@ target_tmux_attach_or_create_session() {
     local SESSION_NAME="$1"
     local WORKSPACE_DIR="$2"
     local TARGET_IP="$3"
-    local SUBDOMAIN="${TARGET_SUBDOMAIN:-echocity-f.com}"
-    local HOSTS_ENTRY
 
     if tmux -L "$SERVER_NAME" has-session -t "$SESSION_NAME" 2>/dev/null; then
         echo -e "${YELLOW}Sesión de Tmux '$SESSION_NAME' ya existe. Adjuntando...${NC}"
@@ -73,35 +71,16 @@ target_tmux_attach_or_create_session() {
     else
         echo -e "${BLUE}Creando y adjuntando nueva sesión de Tmux '$SESSION_NAME' ...${NC}"
 
-        tmux -L "$SERVER_NAME" -f "$TMUX_CONFIG" new-session -d -s "$SESSION_NAME" -n "Recon" -c "$WORKSPACE_DIR"
+        # La sesión se construye a partir de conf/tmux_layout.conf mediante el motor
+        # de lib/target_tmux_layout.sh (ventanas, panes, comandos y guardas).
+        if ! target_tmux_layout_render "$SESSION_NAME" "$WORKSPACE_DIR" "$TARGET_IP"; then
+            echo -e "${RED}Error: no se pudo crear la sesión de tmux '$SESSION_NAME'.${NC}"
+            return 1
+        fi
+
         tmux -L "$SERVER_NAME" set-environment -t "$SESSION_NAME" CTF_WORKSPACE_DIR_TMUX "$WORKSPACE_DIR"
         tmux -L "$SERVER_NAME" set-environment -t "$SESSION_NAME" TMUX_CONF "$TMUX_CONFIG"
 
-        # Ventana 1: Recon (dos paneles)
-        tmux -L "$SERVER_NAME" split-window -v -t "$SESSION_NAME:1" -c "$WORKSPACE_DIR"
-        tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "clear" C-m
-        tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "clear" C-m
-
-        HOSTS_ENTRY="$TARGET_IP        $SESSION_NAME.$SUBDOMAIN"
-        if ! grep -q "$HOSTS_ENTRY" /etc/hosts 2>/dev/null; then
-            tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.1" "sudo sh -c \"echo '$HOSTS_ENTRY' >> /etc/hosts\""
-        else
-            tmux -L "$SERVER_NAME" display-message -t "$SESSION_NAME:1.1" -F "${YELLOW}La entrada '$HOSTS_ENTRY' ya existe en /etc/hosts. Saltando.${NC}"
-        fi
-        tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:1.2" "target scan ports -s "
-
-        # Ventana 2: Exploit
-        tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:2" -n "Exploit" -c "$WORKSPACE_DIR"
-        tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "clear" C-m
-        tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:2" "penelope -p 9000"
-
-        # Ventana 3: Misc
-        tmux -L "$SERVER_NAME" new-window -t "$SESSION_NAME:3" -n "Misc." -c "$WORKSPACE_DIR"
-        tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3" "clear" C-m
-        (tmux -L "$SERVER_NAME" send-keys -t "$SESSION_NAME:3.1" "$REPO_BASE/.config/tmux/plugins/tmux/scripts/ctf_timer.sh start" C-m) &
-
-        tmux -L "$SERVER_NAME" select-window -t "$SESSION_NAME:1"
-        tmux -L "$SERVER_NAME" select-pane -U
         tmux -L "$SERVER_NAME" attach-session -t "$SESSION_NAME"
     fi
 }

@@ -1,6 +1,58 @@
 # Lista de features para implementar
-## target-dirsearch
-- dirsearch usando dirsearch si existe, ffuf como fallback
 
-## target-scan
-- Buscar forma de ejecutar ports sin root
+## Bugs urgentes
+(ninguno)
+
+## Bugs menores
+- target list / target info: hacen source de cada .envrc sin sandbox y sin validar cwd
+- assaultRepository start sirve en 0.0.0.0 sin auth (expone todo ~/weaponry en la red)
+  - Considerar --bind y que el 0.0.0.0 sea opt-in
+
+## Features
+- Configurabilidad de los parametros de NMAP en target
+- Comando target-connect para entrar a una sesión de tmux ya iniciada
+- Configurabilidad de la creacion de la carpeta target
+  - Particularmente, veo que se está copiando ctflinpeas
+- target-dirsearch
+  - Usar dirsearch si existe, ffuf como fallback
+- target-scan
+  - Buscar forma de ejecutar puertos sin root
+- aliases
+  - [x] Agregar los aliases que ya usaba en mi .profile: ars, arst, arl, nscan, nsv, copy
+  - Aliases para target (t?)
+- modulo para OhMyZSH, first and foremost que funcione como alternativa a aliases
+  - Pero que además, proporcione una barra del current target en la consola
+
+## Hecho
+- assaultRepository: safeguards de detención del servidor
+  - El PID file guarda boot_id + start_ticks; se verifica identidad antes de kill
+  - start falla si el puerto está ocupado (antes reportaba éxito falso)
+- Layout de tmux configurable por target
+  - conf/tmux_layout.conf define ventanas, panes, comandos, submit y guardas
+  - Motor en lib/target_tmux_layout.sh; reemplaza el bloque hardcodeado
+  - Placeholders %IP% %SESSION% %SUBDOMAIN% %WORKSPACE% %REPO%
+  - Documentado en docs/TMUX_LAYOUT.md
+- Eliminada la opción `target scan ports -s` (y lib/port_scan_browser.py)
+  - Rompía el flujo de dos fases: escribía recon/port_scan_<IP>.txt mientras
+    target_scan_services leía recon/port_scan.txt
+  - Ahora -s/--services devuelve un error que indica el reemplazo
+  - La sesión de tmux precarga `target scan ports` en vez de la opción retirada
+- aliases/all.sh: corregido el bucle de sourceo en zsh
+  - Causa: comparaba contra $BASH_SOURCE, vacío en zsh; además `dirname ""` da "."
+    así que el glob caía sobre el cwd del usuario y sourceaba .sh ajenos al directorio
+  - Ahora resuelve su propia ruta en bash y zsh, compara rutas absolutas y limpia variables
+  - Verificado con .zshrc real: la terminal arranca y ya no ejecuta .sh del HOME
+- venv: direnv ya no bloquea el .envrc tras `target venv`
+  - Editar .envrc invalida el sello de direnv, así que ahora se corre `direnv allow`
+    siempre (también repara un .envrc bloqueado en una corrida anterior)
+  - De paso: si `python3 -m venv` falla, se aborta con exit 1 en vez de
+    announcear éxito y enganchar el activate a un venv inexistente
+- note/dirsearch: corregido el consumo de argumentos
+  - $1 solo se consume como target si es un workspace válido; si no, ya no se hace
+    shift y sus argumentos se toman como contenido. Un nombre mal escrito antes se
+    colaba dentro de la nota y, fuera de un workspace, creaba un writeup.md espurio
+  - target_note ahora exige que exista writeup.md antes de escribir
+  - target_dirsearch valida que el puerto sea numérico y esté en rango 1-65535
+- conf/assaultRepository.conf y todos los archivos de .conf ahora ignorados por git
+  - Se quedan varios conf/*.conf.example como ilustrativos
+
