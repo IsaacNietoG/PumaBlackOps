@@ -4,15 +4,15 @@
 (ninguno)
 
 ## Bugs menores
-- conf/assaultRepository.conf está en git con REPO_LOCATION=/home/eviltaichi/weaponry
-  - Sacarlo de git, dejar un conf/assaultRepository.conf.example
-  - Análogo para todas las confs necesarias. No trackear directamente los archivos, trackear un .example
-  - Aplica también a conf/tmux_layout.conf (layout personal por usuario)
 - target list / target info: hacen source de cada .envrc sin sandbox y sin validar cwd
 - assaultRepository start sirve en 0.0.0.0 sin auth (expone todo ~/weaponry en la red)
   - Considerar --bind y que el 0.0.0.0 sea opt-in
 
 ## Features
+- Configurabilidad de los parametros de NMAP en target
+- Comando target-connect para entrar a una sesión de tmux ya iniciada
+- Configurabilidad de la creacion de la carpeta target
+  - Particularmente, veo que se está copiando ctflinpeas
 - target-dirsearch
   - Usar dirsearch si existe, ffuf como fallback
 - target-scan
@@ -53,3 +53,6 @@
     colaba dentro de la nota y, fuera de un workspace, creaba un writeup.md espurio
   - target_note ahora exige que exista writeup.md antes de escribir
   - target_dirsearch valida que el puerto sea numérico y esté en rango 1-65535
+- conf/assaultRepository.conf y todos los archivos de .conf ahora ignorados por git
+  - Se quedan varios conf/*.conf.example como ilustrativos
+
