@@ -26,12 +26,16 @@
     - Instalador: spells/install-omz-plugin.sh (symlink|copia|instrucciones)
     - Documentado en docs/OMZ_PLUGIN.md
   - [x] Fase 2: indicador de target en el prompt, replicando el patrón de git
-    - `pbo_target_info` con vars ZSH_THEME_PBO_TARGET_PROMPT_{PREFIX,SUFFIX}
+    - Se inyecta solo (hook precmd, porque OMZ carga el tema después del plugin).
+      No hace falta tocar el .zshrc
+    - Con tema powerline envuelve `prompt_end` y usa el `prompt_segment` del tema,
+      como hace agnoster con prompt_git/prompt_virtualenv
+    - Sin prompt_segment cae a `PROMPT+=' $(pbo_target_info)'`
+    - Muestra la IP (el prompt ya muestra la ruta); sin IP, el nombre del dir
     - Vacío fuera de un workspace, igual que git fuera de un repo
-    - Escapar % en el nombre del target (como _omz_git_prompt_info con la rama)
-    - Sin colores/glyphs hardcodeados y sin soporte especial de p10k: igual que git
+    - Escapa % en la etiqueta (como _omz_git_prompt_info con la rama)
+    - Colores con PBO_TARGET_BG/FG; apagar con PBO_TARGET_DISABLE=1
     - Resuelve por $CTF_WORKSPACE_DIR, o subiendo desde $PWD buscando .envrc
-    - IP desde $IP (direnv) o leyendo `export IP=` del .envrc sin eval
     - Documentado en docs/OMZ_PLUGIN.md
 
 ## Hecho

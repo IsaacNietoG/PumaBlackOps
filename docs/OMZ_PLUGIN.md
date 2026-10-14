@@ -43,20 +43,40 @@ alias | grep -E 'ars|nscan'
 
 ## Indicador de target en el prompt
 
-Agrega **después** de `source $ZSH/oh-my-zsh.sh`:
+**No hay nada que agregar a tu `.zshrc`.** El plugin se inyecta solo en el prompt.
 
-```zsh
-PROMPT+=' $(pbo_target_info)'
+El plugin espera al primer prompt (hook `precmd`) porque Oh My Zsh carga el tema
+*después* de los plugins, y decide cómo integrarse según el tema:
+
+| Tema | Qué hace el plugin |
+|------|--------------------|
+| Powerline (`agnoster` y derivados) | Envuelve `prompt_end` para añadir un segmento con color, igual que hace agnoster con `prompt_git` o `prompt_virtualenv`. |
+| Sin `prompt_segment` (p. ej. `robbyrussell`) | Añade `$(pbo_target_info)` al final de `PROMPT`. |
+
+Dentro de un workspace, con `agnoster`:
+
 ```
-
-Dentro de un workspace de target:
-
-```
-eviltaichi@eviltaichi ~/ws/vulnbox  target:(vulnbox 10.0.0.7)
+eviltaichi@eviltaichi  /home/tu/ws/unified  10.129.44.176 
 ```
 
 Fuera de un target el segmento desaparece por completo, igual que el de git
-fuera de un repositorio.
+fuera de un repositorio, y la cadena de colores del prompt no se altera.
+
+### Qué muestra
+
+La **IP del target**, porque es el único dato que el prompt no muestra ya (la
+ruta del prompt ya incluye el nombre del directorio). Si el `.envrc` no define
+`IP`, cae al nombre del directorio.
+
+Para ponerlo a tu gusto, usa `pbo_target_info` directamente y define las
+variables de formato:
+
+```zsh
+ZSH_THEME_PBO_TARGET_PROMPT_PREFIX="target:("
+ZSH_THEME_PBO_TARGET_PROMPT_SUFFIX=") "
+
+PROMPT+=' $(pbo_target_info)'
+```
 
 ### Cómo se decide el target actual
 
@@ -68,31 +88,25 @@ fuera de un repositorio.
 No lanza subshells ni procesos externos: son operaciones internas de zsh sobre un
 archivo de 3 líneas. Medido en ~0.14 ms por prompt.
 
-### Personalizar el formato
+### Colores del segmento
 
-El segmento no lleva colores ni glifos hardcodeados, igual que `lib/git.zsh` en
-Oh My Zsh: el formato lo pone quien lo usa. Se controla con dos variables, con
-estos valores por defecto:
-
-```zsh
-ZSH_THEME_PBO_TARGET_PROMPT_PREFIX="target:("
-ZSH_THEME_PBO_TARGET_PROMPT_SUFFIX=") "
-```
-
-Para que encaje con el powerline de `agnoster`:
+El color lo pone el tema, no el plugin. Usa el `prompt_segment` del propio tema
+para que la cadena cierre bien:
 
 ```zsh
-ZSH_THEME_PBO_TARGET_PROMPT_PREFIX='%{$fg[blue]%} '
-ZSH_THEME_PBO_TARGET_PROMPT_SUFFIX='%{$reset_color%} '
+PBO_TARGET_BG=magenta
+PBO_TARGET_FG=white
 ```
 
-Envuelve los colores entre `%{` y `%}`, como hace la propia agnoster, para que zsh
-no los cuente como caracteres visibles al calcular el ancho del prompt.
+Por defecto: fondo cyan, texto blanco.
 
 ### Desactivarlo
 
-Comenta la línea `PROMPT+=' ...'`. El resto del plugin (los aliases) sigue
-funcionando igual.
+```zsh
+PBO_TARGET_DISABLE=1
+```
+
+Los aliases del plugin siguen funcionando igual.
 
 ---
 

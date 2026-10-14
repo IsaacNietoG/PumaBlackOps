@@ -26,15 +26,18 @@ if ! alias ars >/dev/null 2>&1; then
     source "$_PBO_REPO/aliases/all.sh"
 fi
 
-# --- Indicador de target en el prompt -------------------------------------------
-# Sigue el mismo patrón que lib/git.zsh de Oh My Zsh:
+# ============================================================================
+# Indicador de target
+#
+# Sigue el patrón de lib/git.zsh de Oh My Zsh:
 #   * vacío cuando no aplica (fuera de un workspace, como git fuera de un repo)
 #   * sin colores hardcodeados: el formato lo pone el tema
 #   * el nombre se escapa con %% para no romper el prompt
+# ============================================================================
 
 # IP del target. Se usa $IP si viene de direnv; si no, se lee la línea
-# 'export IP=' del .envrc sin evaluarlo (nada de eval, y se escapa % al
-# imprimir). Es un archivo de 3 líneas, así que el costo por prompt es nulo.
+# 'export IP=' del .envrc sin evaluarlo (nada de eval). Es un archivo de 3
+# líneas, así que el costo por prompt es despreciable.
 function _pbo_target_ip() {
     [[ -n "${IP:-}" ]] && { REPLY="$IP"; return 0; }
     [[ -f "$1/.envrc" ]] || return 1
@@ -52,8 +55,9 @@ function _pbo_target_ip() {
     return 1
 }
 
-# Nombre + IP del target activo, o vacío si no hay ninguno.
-function pbo_target_info() {
+# Resuelve el target activo. Deja el resultado en _PBO_LABEL.
+# Retorna 1 si no hay target.
+function _pbo_resolve() {
     local ws="" d
 
     # 1) direnv ya exportó CTF_WORKSPACE_DIR al entrar al workspace.
@@ -74,21 +78,67 @@ function pbo_target_info() {
     fi
 
     # Sin workspace: vacío, igual que git fuera de un repositorio.
-    [[ -n "$ws" ]] || return 0
+    [[ -n "$ws" ]] || return 1
 
     local ip=""
-    _pbo_target_ip "$ws" && ip=" $REPLY"
+    _pbo_target_ip "$ws" && ip="$REPLY"
 
-    # Escapar % para que el prompt no lo interprete (igual que hace
-    # _omz_git_prompt_info con el nombre de la rama).
-    local name="${ws:t}"
-    echo "${ZSH_THEME_PBO_TARGET_PROMPT_PREFIX}${name//\%/%%}${ip//\%/%%}${ZSH_THEME_PBO_TARGET_PROMPT_SUFFIX}"
+    # El prompt ya muestra la ruta (y con ella el nombre del target), así que el
+    # segmento muestra la IP: es el dato que no aparece en ninguna otra parte.
+    # Si no hay IP en el .envrc, cae al nombre del directorio.
+    _PBO_LABEL="${ip:-${ws:t}}"
+    return 0
 }
 
-# Variables de tema. OMZ no define defaults para las suyas: si el tema no las
-# pone, el segmento sale vacío. Se hace igual aquí, pero se ofrece un default
-# legible desde el prompt si el usuario no define nada.
-: ${ZSH_THEME_PBO_TARGET_PROMPT_PREFIX:="target:("}
-: ${ZSH_THEME_PBO_TARGET_PROMPT_SUFFIX:=") "}
+# Función pública: texto plano, sin depender del tema.
+function pbo_target_info() {
+    _pbo_resolve || return 0
+    echo "${ZSH_THEME_PBO_TARGET_PROMPT_PREFIX}${_PBO_LABEL//\%/%%}${ZSH_THEME_PBO_TARGET_PROMPT_SUFFIX}"
+}
+
+# Segmento con el estilo del tema, al estilo de prompt_virtualenv de agnoster.
+# Reutiliza el prompt_segment del tema para que la cadena de colores cierre bien.
+function _pbo_prompt_segment() {
+    (( $+functions[prompt_segment] )) || return 0
+    _pbo_resolve || return 0
+    prompt_segment "${PBO_TARGET_BG:-cyan}" "${PBO_TARGET_FG:-$CURRENT_FG}" \
+        "${_PBO_LABEL//\%/%%}"
+}
+
+# --- Integración con el tema ---------------------------------------------------
+# Oh My Zsh carga el tema DESPUÉS de los plugins, así que aquí no existe todavía.
+# Se espera al primer prompt (precmd), cuando el tema ya está cargado.
+#
+# Con tema powerline (agnoster y derivados): se envuelve prompt_end para que
+# el segmento sea el último bloque con color y prompt_end lo cierre. Es el mismo
+# punto donde agnoster mete sus segmentos, así que la cadena no se rompe.
+# Sin prompt_segment: se cae a un PROMPT plano.
+function _pbo_install_segment() {
+    # PBO_TARGET_DISABLE=1 apaga solo el indicador; los aliases no se ven afectados.
+    if [[ -n "${PBO_TARGET_DISABLE:-}" ]]; then
+        return 0
+    fi
+
+    if (( $+functions[prompt_segment] )) && (( $+functions[prompt_end] )); then
+        functions[_pbo_orig_prompt_end]=$functions[prompt_end]
+        function prompt_end() {
+            _pbo_prompt_segment
+            _pbo_orig_prompt_end
+        }
+    else
+        PROMPT+=' $(pbo_target_info)'
+    fi
+    add-zsh-hook -d precmd _pbo_install_segment
+}
+
+if (( $+functions[add-zsh-hook] )); then
+    add-zsh-hook precmd _pbo_install_segment
+else
+    _pbo_install_segment
+fi
+
+# Colores del segmento powerline (usados solo si el tema define prompt_segment).
+: ${PBO_TARGET_BG:=cyan}
+: ${PBO_TARGET_FG:=white}
 
 unset _PBO_REPO
