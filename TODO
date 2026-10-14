@@ -20,8 +20,19 @@
 - aliases
   - [x] Agregar los aliases que ya usaba en mi .profile: ars, arst, arl, nscan, nsv, copy
   - Aliases para target (t?)
-- modulo para OhMyZSH, first and foremost que funcione como alternativa a aliases
-  - Pero que además, proporcione una barra del current target en la consola
+- modulo para OhMyZSH
+  - [x] Fase 1: plugin que carga los aliases (omz/pumablackops.plugin.zsh)
+    - No duplica aliases: sourcea aliases/all.sh
+    - Instalador: spells/install-omz-plugin.sh (symlink|copia|instrucciones)
+    - Documentado en docs/OMZ_PLUGIN.md
+  - [x] Fase 2: indicador de target en el prompt, replicando el patrón de git
+    - `pbo_target_info` con vars ZSH_THEME_PBO_TARGET_PROMPT_{PREFIX,SUFFIX}
+    - Vacío fuera de un workspace, igual que git fuera de un repo
+    - Escapar % en el nombre del target (como _omz_git_prompt_info con la rama)
+    - Sin colores/glyphs hardcodeados y sin soporte especial de p10k: igual que git
+    - Resuelve por $CTF_WORKSPACE_DIR, o subiendo desde $PWD buscando .envrc
+    - IP desde $IP (direnv) o leyendo `export IP=` del .envrc sin eval
+    - Documentado en docs/OMZ_PLUGIN.md
 
 ## Hecho
 - assaultRepository: safeguards de detención del servidor
