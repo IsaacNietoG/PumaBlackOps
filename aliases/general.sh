@@ -12,9 +12,13 @@ alias arl="assaultRepository list"
 # nscan <IP>        -> nmap --open -p- -v <IP>
 # nsv <IP> <puertos> -> nmap -sV -p <puertos> <IP>
 alias nscan="nmap --open -p- -v"
-alias nsv="nmap -sV -p"
+alias nsv="nmap -sV -sC -p"
 
 ## Utilidades
 alias httpserver='python3 -m http.server'
 alias listen='nc -lvnp'
 alias copy='xclip -se clip'
+
+## Edición de archivos clave
+
+alias vihost='sudo vim /etc/hosts'
