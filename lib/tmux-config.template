@@ -17,8 +17,6 @@ bind -n M-Right select-pane -R
 bind -n M-Up select-pane -U
 bind -n M-Down select-pane -D
 
-# Copiar selección al clipboard
-bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection-and-cancel \; run "tmux save-buffer - | xclip -i -selection clipboard"
 set-option -g status-interval 1
 
 #### --- PLUGINS --- ####
